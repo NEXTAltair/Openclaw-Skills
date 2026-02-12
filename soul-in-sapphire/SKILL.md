@@ -178,6 +178,12 @@ This should be fuzzy and self-throttling (avoid spamming writes when nothing mat
 Implementation target:
 - `node /home/altair/clawd/skills/soul-in-sapphire/scripts/emostate_tick.js`
 
+### Subagent offload policy (non-blocking)
+
+- For heavier memory reflection work, offload with `sessions_spawn` (non-blocking).
+- Use per-agent subagent override model for `main` (configured to `openai-codex/gpt-5.3-codex`).
+- Fire-and-forget behavior: do not send user-facing completion summaries unless explicitly requested or action is needed.
+
 **Required setup reminder (important):**
 - If `HEARTBEAT.md` is empty/comments-only, heartbeat work may be skipped and emotion/state ticks will not be recorded.
 - When this skill is enabled for ongoing emotion logging, add at least one explicit heartbeat task in `HEARTBEAT.md` to check recent context and write emostate when meaningful changes are detected.
