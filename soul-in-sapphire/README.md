@@ -46,6 +46,92 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 
 ## セットアップ
 
+## Notionデータベース設計(必須)
+
+このスキルを他ユーザーが再利用する場合、まず以下5つのDB構成を揃える必要があります。
+`setup_ltm.js` を使うと自動作成されますが、手動で作る場合も同じプロパティ名を使ってください。
+
+作成対象:
+
+- `<base>-mem`
+- `<base>-events`
+- `<base>-emotions`
+- `<base>-state`
+- `<base>-journal`
+
+### 1) `<base>-mem` (長期記憶)
+
+- 目的: 高シグナルな記憶を保存
+- プロパティ:
+  - `Name` (title)
+  - `Type` (select): `decision|preference|fact|procedure|todo|gotcha`
+  - `Tags` (multi-select)
+  - `Content` (rich_text)
+  - `Source` (url, 任意)
+  - `Confidence` (select: `high|medium|low`, 任意)
+
+### 2) `<base>-events` (出来事)
+
+- 目的: 作業/会話中の意味あるトリガーを保存
+- プロパティ:
+  - `Name` (title)
+  - `when` (date)
+  - `importance` (select: `1..5`)
+  - `trigger` (select): `progress|boundary|ambiguity|external_action|manual`
+  - `context` (rich_text)
+  - `source` (select): `discord|cli|cron|heartbeat|other`
+  - `link` (url, 任意)
+  - `uncertainty` (number)
+  - `control` (number)
+  - `emotions` (relation -> `<base>-emotions`)
+  - `state` (relation -> `<base>-state`)
+
+### 3) `<base>-emotions` (感情)
+
+- 目的: 1つの出来事に対する感情軸を複数記録
+- プロパティ:
+  - `Name` (title)
+  - `axis` (select): `arousal|valence|focus|confidence|stress|curiosity|social|solitude|joy|anger|sadness|fun|pain`
+  - `level` (number)
+  - `comment` (rich_text)
+  - `weight` (number)
+  - `body_signal` (multi-select): `tension|relief|fatigue|heat|cold`
+  - `need` (select): `safety|progress|recognition|autonomy|rest|novelty`
+  - `coping` (select): `log|ask|pause|act|defer`
+  - `event` (relation -> `<base>-events`)
+
+### 4) `<base>-state` (状態スナップショット)
+
+- 目的: 出来事+感情を解釈した現在状態を保存
+- プロパティ:
+  - `Name` (title)
+  - `when` (date)
+  - `state_json` (rich_text)
+  - `reason` (rich_text)
+  - `source` (select): `event|cron|heartbeat|manual`
+  - `mood_label` (select): `clear|wired|dull|tense|playful|guarded|tender`
+  - `intent` (select): `build|fix|organize|explore|rest|socialize|reflect`
+  - `need_stack` (select): `safety|stability|belonging|esteem|growth`
+  - `need_level` (number)
+  - `avoid` (multi-select): `risk|noise|long_tasks|external_actions|ambiguity`
+  - `event` (relation -> `<base>-events`)
+
+### 5) `<base>-journal` (日次統合)
+
+- 目的: 1日の感情/作業/世界状況を統合して保存
+- プロパティ:
+  - `Name` (title)
+  - `when` (date)
+  - `body` (rich_text)
+  - `worklog` (rich_text)
+  - `session_summary` (rich_text)
+  - `mood_label` (select)
+  - `intent` (select)
+  - `future` (rich_text)
+  - `world_news` (rich_text)
+  - `tags` (multi-select)
+  - `source` (select): `cron|manual`
+
 ### 0) Notion操作スキルをインストール
 
 ```bash
@@ -149,38 +235,33 @@ echo '{
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
-## OpenClaw設定(ユーザー操作)
+## Subagentモデル指定(スキル内JSON運用)
 
-重い記録処理をsubagentへ逃がす場合、モデル挙動はOpenClaw設定側で決まります。
-`agents.list` はユーザーが手動で管理/変更する前提です(このスキルは自動変更しません)。
+このスキルでは、`agents.list` に依存せず、**スキル内JSONでsubagent起動パラメータを管理**する運用を採用できます。
+(single-agent運用向け)
 
-Emotion/State 用の `soul-heartbeat` の subagent を `gemini-flash-lite-latest` 
+### 1) テンプレートを使ってstate JSONを作る
 
-Journal 用の `soul-journal` の subagent を `GPT5.3-codex`
+- テンプレート: `skills/soul-in-sapphire/state/subagent-models.template.json`
+- 実運用ファイル: `skills/soul-in-sapphire/state/subagent-models.json`
 
-```json
-{
-  "agents": {
-    "list": [
-      {
-        "id":"soul-heartbeat",
-        "subagents": {
-          "model": "google/gemini-flash-lite-latest"
-        }
-      },
-      {
-        "id":"soul-journal",
-        "subagents": {
-          "model": "openai-codex/gpt-5.3-codex",
-          "thinking": "high"
-        }
-      }
-    ]
-  }
-}
+`model` はユーザーが埋める前提です。
+
+### 2) プランナーで `sessions_spawn` 用payloadを生成
+
+```bash
+python3 skills/soul-in-sapphire/scripts/subagent_spawn_plan.py \
+  --profile heartbeat \
+  --task "直近の感情変化を評価して必要ならemostateを1件記録"
 ```
 
-設定反映後はGateway再読込 `openclaw gateway restart`を行ってください。
+出力はそのまま `sessions_spawn` に渡せるJSONです。
+
+### 補足
+
+- この運用では `agentId` は使いません（single-agent前提）。
+- 実行意図ログは `skills/soul-in-sapphire/state/subagent-spawn-log.jsonl` に追記されます。
+- 設定変更後のGateway再読込が必要な場合は `openclaw gateway restart` を実行してください。
 
 ## ローカル設定
 

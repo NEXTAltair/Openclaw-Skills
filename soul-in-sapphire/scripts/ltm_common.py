@@ -12,7 +12,17 @@ def load_config(path: str | None = None) -> dict:
             f"Missing config: {p}\n"
             "Run bootstrap first: python3 skills/soul-in-sapphire/scripts/bootstrap_config.py --name 'OpenClaw LTM'"
         )
-    return json.loads(p.read_text(encoding="utf-8"))
+    cfg = json.loads(p.read_text(encoding="utf-8"))
+
+    # Backward/forward compatibility:
+    # - old format: flat keys at root (database_id, data_source_id)
+    # - new format: nested mem.{database_id,data_source_id}
+    if not cfg.get("database_id") or not cfg.get("data_source_id"):
+        mem = cfg.get("mem") or {}
+        if mem.get("database_id") and mem.get("data_source_id"):
+            cfg = {**cfg, "database_id": mem["database_id"], "data_source_id": mem["data_source_id"]}
+
+    return cfg
 
 
 def require_ids(cfg: dict):

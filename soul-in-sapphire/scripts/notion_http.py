@@ -30,7 +30,10 @@ def _token() -> str:
 
 
 def http_json(method: str, api_path: str, payload: Any | None = None) -> dict:
-    url = f"{NOTION_API_BASE}{api_path}"
+    p = api_path if api_path.startswith("/") else f"/{api_path}"
+    if not p.startswith("/v1/"):
+        p = f"/v1{p}"
+    url = f"{NOTION_API_BASE}{p}"
     data = None
     if payload is not None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
