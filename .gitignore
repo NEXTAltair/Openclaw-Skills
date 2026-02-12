@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Local env/secrets
+.env
+.env.*
+
+# ClawHub metadata
+.clawhub/
+
+#Clawhubから導入
+context7/
+sonoscli/
+notion-api-automation/
+moltbook/
+
+#user環境依存が強いので一旦無視
+lorairo-mem/
+media-name-normalize/
+
+
+#完成度が低いので一旦無視
+rr-renamer/
+video-archive-db/SKILL.md
+video-metadata-extract/SKILL.md
+videolibrary-organizer/SKILL.md
