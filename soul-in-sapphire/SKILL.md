@@ -168,11 +168,10 @@ Do not use `soul-in-sapphire` local planner scripts for this anymore.
 
 - Template: `skills/subagent-spawn-command-builder/state/spawn-profiles.template.json`
 - Active preset: `skills/subagent-spawn-command-builder/state/spawn-profiles.json`
-- Builder:
-
-```bash
-python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py --profile <heartbeat|journal> --task "..."
-```
+- Builder usage (skill-level):
+  - Call `subagent-spawn-command-builder`
+  - Use profile `<heartbeat|journal>`
+  - Provide the run-specific task text
 
 Output is ready-to-use JSON for `sessions_spawn`.
 

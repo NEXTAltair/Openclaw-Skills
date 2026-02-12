@@ -267,13 +267,11 @@ cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
 
 `spawn-profiles.json` の `profiles.heartbeat` / `profiles.journal` を編集して使うモデルを設定します。
 
-### 3) builderで `sessions_spawn` payloadを生成
+### 3) builderスキルで `sessions_spawn` payloadを生成
 
-```bash
-python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py \
-  --profile heartbeat \
-  --task "直近の感情変化を評価して必要ならemostateを1件記録"
-```
+- `subagent-spawn-command-builder` を呼び出す
+- `profile=heartbeat` を指定
+- `task` に「直近の感情変化を評価して必要ならemostateを1件記録」を渡す
 
 出力はそのまま `sessions_spawn` に渡せるJSONです。
 
