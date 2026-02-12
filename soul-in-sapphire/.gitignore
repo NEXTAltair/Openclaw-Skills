@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# Local env/secrets
+.env
+.env.*
+
+# ClawHub metadata
+.clawhub/
+scripts/bootstrap_config.py
+scripts/ltm_search.py
