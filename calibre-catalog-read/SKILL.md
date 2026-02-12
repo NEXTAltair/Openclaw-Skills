@@ -13,6 +13,7 @@ Use this skill for:
 
 - `calibredb` available on PATH in the runtime where scripts are executed.
 - `ebook-convert` available for text extraction.
+- `subagent-spawn-command-builder` installed (for spawn payload generation).
 - Reachable Calibre Content server URL in `--with-library` format:
   - `http://HOST:PORT/#LIBRARY_ID`
 - Do not assume localhost/127.0.0.1; always pass explicit reachable `HOST:PORT`.
@@ -122,6 +123,8 @@ Book-reading analysis is a heavy task. Use a subagent with a lightweight model f
 
 Rules:
 - Use subagent only for heavy analysis generation; keep main agent lightweight and non-blocking.
+- In this environment, Python commands must use `python3` (never `python`).
+- Use the strict prompt template (`references/subagent-analysis.prompt.md`) as mandatory base; do not send ad-hoc relaxed read instructions.
 - Keep final DB upsert and Calibre metadata apply in main agent.
 - Process one book per run.
 - Confirm model/thinking/timeout once per session, then reuse; do not hardcode provider-specific model IDs in the skill.
@@ -150,7 +153,9 @@ Required runtime sequence:
      --book-id <id> --title "<title>" --lang ja \
      --text-path /tmp/book_<id>.txt --out-dir /tmp/calibre_subagent_<id>
    ```
-2. Main agent calls `sessions_spawn` (model/thinking/timeout confirmed with user).
+2. Main agent uses the shared builder skill `subagent-spawn-command-builder` to generate the `sessions_spawn` payload, then calls `sessions_spawn`.
+   - Build with profile `calibre-read` and run-specific analysis task text.
+   - Use the generated JSON as-is (or merge minimal run-specific fields such as label/task text).
 3. Subagent reads all `source_files` and returns analysis JSON (schema-conformant).
 4. Main agent passes that file via `--analysis-json` to `run_analysis_pipeline.py` for DB/apply.
 
@@ -163,7 +168,8 @@ For Discord/chat, always run as **two separate turns**.
 
 ### Turn A: start only (must be fast)
 - Select one target book.
-- Call `sessions_spawn`.
+- Build spawn payload with `subagent-spawn-command-builder` (`--profile calibre-read` + run-specific `--task`).
+- Call `sessions_spawn` using that payload.
 - Record run state (`runId`) via `run_state.py upsert`.
 - Reply to user with selected title + "running in background".
 - **Stop turn here.**

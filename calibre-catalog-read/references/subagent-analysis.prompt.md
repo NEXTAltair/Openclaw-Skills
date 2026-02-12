@@ -41,15 +41,20 @@ Quality constraints:
 Do not invent these values. Confirm once at session start and reuse unless user requests a change.
 
 
-## Strict read contract
+## Runtime command rule
 
-- Read `subagent_input.json` using exactly: `{"path":"<file>"}`.
+- If you need to execute Python scripts, always use `python3` (never `python`).
+
+## Strict read contract (hard requirement)
+
+- Never call `read` without `path`.
+- Always call `read` with this exact shape: `{"path":"<absolute-or-workspace-relative-file>"}`.
+- First read: `subagent_input.json` using `{"path":".../subagent_input.json"}`.
 - Parse `source_files` from that JSON.
-- Read each source file exactly once, in order, using exactly: `{"path":"<file>"}`.
+- Then read each source file exactly once, in listed order, using only `{"path":"<file>"}`.
 - Do not use `file_path`.
 - Do not use offset/limit pagination for this workflow.
-- If a source file read fails, stop and return JSON with:
-  - `book_id`, `lang`, `summary` (short error note), `highlights` (1 item), `reread` (1 item), `tags` (include `analysis-error`).
+- If any read fails or path is unknown, stop and return schema-valid JSON with `analysis-error` tag instead of free text.
 
 ## Output discipline
 
