@@ -151,6 +151,33 @@ echo '{
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
+## OpenClaw設定（ユーザー操作）
+
+重い記録処理をsubagentへ逃がす場合、モデル挙動はOpenClaw設定側で決まります。
+
+`main` の subagent を `GPT5.3-Codex` で動かす例:
+
+```json
+{
+  "agents": {
+    "list": [
+      {
+        "id": "main",
+        "subagents": {
+          "model": {
+            "primary": "openai-codex/gpt-5.3-codex",
+            "fallbacks": ["openai-codex/gpt-5.2"]
+          },
+          "thinking": "low"
+        }
+      }
+    ]
+  }
+}
+```
+
+設定反映後はGateway再読込（restart/reload）を行ってください。
+
 ## ローカル設定
 
 `~/.config/soul-in-sapphire/config.json` はローカル専用。

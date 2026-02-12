@@ -181,7 +181,7 @@ Implementation target:
 ### Subagent offload policy (non-blocking)
 
 - For heavier memory reflection work, offload with `sessions_spawn` (non-blocking).
-- Use per-agent subagent override model for `main` (configured to `openai-codex/gpt-5.3-codex`).
+- Use the `main` agent's subagent model override when configured.
 - Fire-and-forget behavior: do not send user-facing completion summaries unless explicitly requested or action is needed.
 
 **Required setup reminder (important):**
