@@ -14,6 +14,7 @@ A skill for updating metadata of existing Calibre books.
 - Reachable Calibre Content server URL
   - `http://HOST:PORT/#LIBRARY_ID`
 - If authentication is enabled, pass both `--username` and `--password-env`
+- Optional auth cache: `--save-auth` (default file: `~/.config/calibre-metadata-apply/auth.json`)
 
 ## Supported fields
 

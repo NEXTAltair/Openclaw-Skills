@@ -7,8 +7,10 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 ALLOWED = {
@@ -60,15 +62,88 @@ def run_ok(cmd: list[str]) -> str:
     return out
 
 
+DEFAULT_AUTH_FILE = Path.home() / ".config" / "calibre-metadata-apply" / "auth.json"
+
+
+def load_auth_file(path: Path) -> dict[str, str]:
+    try:
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return {}
+        out: dict[str, str] = {}
+        for k in ("username", "password", "password_env"):
+            v = data.get(k)
+            if isinstance(v, str) and v.strip():
+                out[k] = v.strip()
+        return out
+    except Exception:
+        return {}
+
+
+def save_auth_file(path: Path, *, username: str, password: str | None, password_env: str | None) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, str] = {"username": username}
+    if password:
+        payload["password"] = password
+    if password_env:
+        payload["password_env"] = password_env
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+
+
+def resolve_auth(ns: argparse.Namespace) -> tuple[str | None, str | None, str | None]:
+    auth = load_auth_file(Path(ns.auth_file)) if ns.auth_file else {}
+
+    username = ns.username or auth.get("username")
+
+    password = ns.password
+    if not password and ns.password_env:
+        password = os.environ.get(ns.password_env, "")
+    if not password and auth.get("password_env"):
+        password = os.environ.get(auth.get("password_env", ""), "")
+    if not password:
+        password = auth.get("password")
+
+    used_password_env = ns.password_env or auth.get("password_env")
+
+    if ns.save_auth:
+        if not username:
+            raise ValueError("--save-auth requires username (provide --username or existing auth file with username)")
+        if not password and not used_password_env:
+            raise ValueError("--save-auth requires password source (--password or --password-env with env value)")
+        save_auth_file(
+            Path(ns.auth_file),
+            username=username,
+            password=password if ns.save_plain_password else None,
+            password_env=used_password_env,
+        )
+
+    return username, password, used_password_env
+
+
 def common_args(ns: argparse.Namespace) -> list[str]:
     args = ["--with-library", ns.with_library]
-    if ns.username:
-        args += ["--username", ns.username]
-    if ns.password_env:
-        pw = os.environ.get(ns.password_env, "")
-        if pw:
-            args += ["--password", pw]
+    if ns._auth_username:
+        args += ["--username", ns._auth_username]
+    if ns._auth_password:
+        args += ["--password", ns._auth_password]
     return args
+
+
+def redacted_cmd(cmd: list[str]) -> str:
+    out: list[str] = []
+    skip_next_password = False
+    for i, token in enumerate(cmd):
+        if skip_next_password:
+            out.append("********")
+            skip_next_password = False
+            continue
+        out.append(token)
+        if token == "--password" and i + 1 < len(cmd):
+            skip_next_password = True
+    return " ".join(shlex.quote(x) for x in out)
 
 
 def to_field_value(v: Any) -> str:
@@ -242,10 +317,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--with-library", required=True)
     ap.add_argument("--username")
+    ap.add_argument("--password", help="Direct password value for Calibre server auth")
     ap.add_argument("--password-env", default="CALIBRE_PASSWORD")
+    ap.add_argument("--auth-file", default=str(DEFAULT_AUTH_FILE), help="Auth cache file path")
+    ap.add_argument("--save-auth", action="store_true", help="Save resolved auth to --auth-file")
+    ap.add_argument("--save-plain-password", action="store_true", help="When used with --save-auth, save plaintext password into auth file")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--lang", default="ja", choices=["ja", "en"], help="Default language for generated HTML labels")
     ns = ap.parse_args()
+
+    ns._auth_username, ns._auth_password, ns._auth_password_env = resolve_auth(ns)
 
     lines = [ln.strip() for ln in sys.stdin.read().splitlines() if ln.strip()]
     if not lines:
@@ -264,7 +345,7 @@ def main() -> int:
             planned += 1
 
             if not ns.apply:
-                results.append({"line": i, "id": rec.get("id"), "action": "planned", "cmd": " ".join(shlex.quote(x) for x in cmd)})
+                results.append({"line": i, "id": rec.get("id"), "action": "planned", "cmd": redacted_cmd(cmd)})
                 continue
 
             rc, out, err = run(cmd)

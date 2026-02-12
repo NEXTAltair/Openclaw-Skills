@@ -59,7 +59,11 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
    - localhost前提にしない（明示的なHOST:PORTを使う）
 7. 認証が有効な場合は次を指定する
    - `--username <user>`
-   - `--password-env <ENV_VAR>`
+   - `--password-env <ENV_VAR>` または `--password <plain>`
+8. 認証情報を保存して再利用したい場合は `--save-auth` を使う
+   - 既定保存先: `~/.config/calibre-metadata-apply/auth.json`
+   - 既定では `username` と `password_env` を保存
+   - 平文パスワードも保存する場合のみ `--save-plain-password` を追加
 
 ### ユーザーが先に実行すること（例: Ubuntu/WSL）
 
@@ -105,6 +109,23 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
     }
   }
 }
+```
+
+## 認証キャッシュ（初回保存）
+
+初回だけ認証情報を保存しておくと、以後は `--username` / `--password-env` を省略できます。
+
+```bash
+cat references/changes.example.jsonl | python3 scripts/calibredb_apply.py \
+  --with-library "http://127.0.0.1:8080/#MyLibrary" \
+  --username "your_user" --password-env CALIBRE_PASSWORD \
+  --save-auth
+```
+
+平文パスワードも保存したい場合（非推奨）は次を追加:
+
+```bash
+--save-plain-password
 ```
 
 ## クイックテスト（dry-run）
