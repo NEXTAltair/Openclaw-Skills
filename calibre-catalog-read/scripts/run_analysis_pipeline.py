@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, hashlib, json, os, re, subprocess, tempfile
+import argparse, datetime as dt, hashlib, json, os, re, subprocess, tempfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -44,6 +44,120 @@ def simple_analysis(text: str, lang: str) -> dict:
     if kws:
         highlights.append("Detected keywords: " + ", ".join(kws[:6]))
     return {"summary": summary, "highlights": highlights[:5], "reread": reread}
+
+
+OC_START = "<!-- OC_ANALYSIS_START -->"
+OC_END = "<!-- OC_ANALYSIS_END -->"
+
+I18N = {
+    "ja": {
+        "title": "OpenClaw解析",
+        "summary": "要約",
+        "key_points": "重要ポイント",
+        "reread": "再読ガイド",
+        "generated_at": "生成日時",
+        "file_hash": "ファイルハッシュ",
+        "analysis_tags": "解析タグ",
+        "section": "章/節",
+        "page": "ページ",
+        "chunk": "チャンク",
+    },
+    "en": {
+        "title": "OpenClaw Analysis",
+        "summary": "Summary",
+        "key_points": "Key points",
+        "reread": "Reread guide",
+        "generated_at": "generated_at",
+        "file_hash": "file_hash",
+        "analysis_tags": "analysis_tags",
+        "section": "section",
+        "page": "page",
+        "chunk": "chunk",
+    },
+}
+
+
+def split_multi(v):
+    if v is None:
+        return []
+    if isinstance(v, list):
+        raw = [str(x) for x in v]
+    else:
+        raw = re.split(r"[,;\n]", str(v))
+    out, seen = [], set()
+    for x in raw:
+        t = x.strip()
+        if not t:
+            continue
+        k = t.casefold()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(t)
+    return out
+
+
+def render_analysis_html(analysis: dict, default_lang: str = "ja") -> str:
+    summary = str(analysis.get("summary", "")).strip()
+    highlights = split_multi(analysis.get("highlights", []))
+    tags = split_multi(analysis.get("tags", []))
+    reread = analysis.get("reread", [])
+    generated_at = str(analysis.get("generated_at", "")).strip() or dt.datetime.now(dt.timezone.utc).isoformat()
+    source_hash = str(analysis.get("file_hash", "")).strip()
+
+    lang = str(analysis.get("lang", default_lang)).strip().lower()
+    if lang not in I18N:
+        lang = default_lang if default_lang in I18N else "en"
+    tr = I18N[lang]
+
+    lines = [OC_START, '<div class="openclaw-analysis">', f"<h3>{tr['title']}</h3>"]
+    if summary:
+        lines.append(f"<p><strong>{tr['summary']}:</strong> {summary}</p>")
+    if highlights:
+        lines.append(f"<h4>{tr['key_points']}</h4><ul>")
+        for h in highlights:
+            lines.append(f"<li>{h}</li>")
+        lines.append("</ul>")
+    if reread and isinstance(reread, list):
+        lines.append(f"<h4>{tr['reread']}</h4><ul>")
+        for item in reread:
+            if not isinstance(item, dict):
+                continue
+            section = str(item.get("section", "")).strip()
+            page = str(item.get("page", "")).strip()
+            chunk = str(item.get("chunk_id", "")).strip()
+            reason = str(item.get("reason", "")).strip()
+            parts = [
+                p for p in [
+                    f"{tr['section']}: {section}" if section else "",
+                    f"{tr['page']}: {page}" if page else "",
+                    f"{tr['chunk']}: {chunk}" if chunk else "",
+                    reason,
+                ] if p
+            ]
+            if parts:
+                lines.append(f"<li>{' | '.join(parts)}</li>")
+        lines.append("</ul>")
+
+    meta_bits = [f"{tr['generated_at']}: {generated_at}"]
+    if source_hash:
+        meta_bits.append(f"{tr['file_hash']}: {source_hash}")
+    if tags:
+        meta_bits.append(f"{tr['analysis_tags']}: {', '.join(tags)}")
+    lines.append(f"<p><em>{' / '.join(meta_bits)}</em></p>")
+    lines.append("</div>")
+    lines.append(OC_END)
+    return "\n".join(lines)
+
+
+def upsert_oc_block(existing_html: str, oc_block_html: str) -> str:
+    existing = existing_html or ""
+    pattern = re.compile(re.escape(OC_START) + r".*?" + re.escape(OC_END), re.DOTALL)
+    if pattern.search(existing):
+        return pattern.sub(oc_block_html, existing)
+    if existing.strip():
+        return existing.rstrip() + "\n\n" + oc_block_html
+    return oc_block_html
 
 
 def is_excluded_content(meta: dict) -> tuple[bool, str]:
@@ -148,9 +262,32 @@ def main():
     subprocess.run(["python3", str(SCRIPT_DIR / "analysis_db.py"), "upsert", "--db", ns.db],
                    input=json.dumps(record, ensure_ascii=False), text=True, check=True)
 
-    payload = {"id": ns.book_id, "analysis": {"lang": ns.lang, "summary": record["summary"], "highlights": record["highlights"], "reread": record["reread"], "tags": record["tags"], "file_hash": fhash}}
-    subprocess.run(["python3", "/home/altair/clawd/skills/calibre-metadata-apply/scripts/calibredb_apply.py", "--with-library", ns.with_library, *(["--username", ns.username] if ns.username else []), "--password-env", ns.password_env, "--lang", ns.lang, "--apply"],
-                   input=json.dumps(payload, ensure_ascii=False)+"\n", text=True, check=True)
+    # Apply comments update directly here to keep this skill independent.
+    current = json.loads(run([
+        "calibredb", "--with-library", ns.with_library, *auth,
+        "list", "--for-machine", "--search", f"id:{ns.book_id}",
+        "--fields", "id,comments", "--limit", "2",
+    ]))
+    existing_comments = ""
+    if current:
+        existing_comments = str(current[0].get("comments") or "")
+
+    analysis_for_html = {
+        "lang": ns.lang,
+        "summary": record["summary"],
+        "highlights": record["highlights"],
+        "reread": record["reread"],
+        "tags": record["tags"],
+        "file_hash": fhash,
+    }
+    oc_block = render_analysis_html(analysis_for_html, default_lang=ns.lang)
+    merged_comments = upsert_oc_block(existing_comments, oc_block)
+
+    run([
+        "calibredb", "--with-library", ns.with_library, *auth,
+        "set_metadata", str(ns.book_id),
+        "--field", f"comments:{merged_comments}",
+    ])
 
     print(json.dumps({"ok": True, "book_id": ns.book_id, "title": title, "file_hash": fhash, "updated": True}, ensure_ascii=False))
 

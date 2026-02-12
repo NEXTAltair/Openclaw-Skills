@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
+import { dirname } from 'node:path';
+import os from 'node:os';
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -16,12 +19,64 @@ function parseArgs(argv) {
   return out;
 }
 
+const DEFAULT_AUTH_FILE = `${os.homedir()}/.config/calibre-catalog-read/auth.json`;
+
+function loadAuthFile(path) {
+  try {
+    if (!existsSync(path)) return {};
+    const raw = JSON.parse(readFileSync(path, 'utf8'));
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    for (const k of ['username', 'password', 'password_env']) {
+      const v = raw[k];
+      if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveAuthFile(path, { username, password, passwordEnv }) {
+  mkdirSync(dirname(path), { recursive: true });
+  const payload = { username };
+  if (password) payload.password = password;
+  if (passwordEnv) payload.password_env = passwordEnv;
+  writeFileSync(path, JSON.stringify(payload, null, 2) + '\n', 'utf8');
+  chmodSync(path, 0o600);
+}
+
+function resolveAuth(args) {
+  const authFile = String(args['auth-file'] || DEFAULT_AUTH_FILE);
+  const saved = loadAuthFile(authFile);
+  const username = args.username ? String(args.username) : (saved.username || '');
+
+  let password = args.password ? String(args.password) : '';
+  const explicitEnv = args['password-env'] ? String(args['password-env']) : '';
+  const savedEnv = saved.password_env || '';
+  const passwordEnv = explicitEnv || savedEnv || 'CALIBRE_PASSWORD';
+
+  if (!password && passwordEnv) password = process.env[passwordEnv] || '';
+  if (!password && saved.password) password = saved.password;
+
+  if (args['save-auth']) {
+    if (!username) throw new Error('--save-auth requires username (via --username or auth file)');
+    if (!password && !passwordEnv) throw new Error('--save-auth requires password source (--password or --password-env)');
+    saveAuthFile(authFile, {
+      username,
+      password: args['save-plain-password'] ? password : '',
+      passwordEnv,
+    });
+  }
+
+  return { username, password };
+}
+
 function commonArgs(args) {
   const r = ['--with-library', String(args['with-library'] || '')];
-  if (args.username) r.push('--username', String(args.username));
-  const penv = String(args['password-env'] || 'CALIBRE_PASSWORD');
-  const pw = process.env[penv] || '';
-  if (pw) r.push('--password', pw);
+  const auth = resolveAuth(args);
+  if (auth.username) r.push('--username', auth.username);
+  if (auth.password) r.push('--password', auth.password);
   return r;
 }
 
@@ -50,7 +105,7 @@ function main() {
   if (!cmd || !['list', 'search', 'id'].includes(cmd)) {
     console.log(JSON.stringify({
       ok: false,
-      error: 'usage: calibredb_read.mjs <list|search|id> --with-library <url#lib> [--username u] [--password-env ENV] [--fields f] [--limit n] [--query q] [--book-id id]'
+      error: 'usage: calibredb_read.mjs <list|search|id> --with-library <url#lib> [--username u] [--password p|--password-env ENV] [--auth-file path] [--save-auth] [--save-plain-password] [--fields f] [--limit n] [--query q] [--book-id id]'
     }, null, 2));
     process.exit(1);
   }
