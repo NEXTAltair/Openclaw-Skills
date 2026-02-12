@@ -42,20 +42,18 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 
 - OpenClaw Gateway
 - Notion Integration + token
-- Notion操作用スキル（ClawHub）: `notion-api-automation`
-
-インストール例:
-
-```bash
-clawhub install notion-api-automation
-```
+- Notion操作用スキル(ClawHub): `notion-api-automation`
 
 ## セットアップ
 
 ### 0) Notion操作スキルをインストール
 
 ```bash
-clawhub install notion-api-automation
+npx clawhub@latest install notion-api-automation
+```
+
+``bash
+pnpm dlx clawhub@latest install notion-api-automation
 ```
 
 ### 1) Notion Integration
@@ -151,24 +149,30 @@ echo '{
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
-## OpenClaw設定（ユーザー操作）
+## OpenClaw設定(ユーザー操作)
 
 重い記録処理をsubagentへ逃がす場合、モデル挙動はOpenClaw設定側で決まります。
+`agents.list` はユーザーが手動で管理/変更する前提です(このスキルは自動変更しません)。
 
-`main` の subagent を `GPT5.3-Codex` で動かす例:
+Emotion/State 用の `soul-heartbeat` の subagent を `gemini-flash-lite-latest` 
+
+Journal 用の `soul-journal` の subagent を `GPT5.3-codex`
 
 ```json
 {
   "agents": {
     "list": [
       {
-        "id": "main",
+        "id":"soul-heartbeat",
         "subagents": {
-          "model": {
-            "primary": "openai-codex/gpt-5.3-codex",
-            "fallbacks": ["openai-codex/gpt-5.2"]
-          },
-          "thinking": "low"
+          "model": "google/gemini-flash-lite-latest"
+        }
+      },
+      {
+        "id":"soul-journal",
+        "subagents": {
+          "model": "openai-codex/gpt-5.3-codex",
+          "thinking": "high"
         }
       }
     ]
@@ -176,7 +180,7 @@ OpenClawの cron/heartbeat は環境ごとに設定してください。
 }
 ```
 
-設定反映後はGateway再読込（restart/reload）を行ってください。
+設定反映後はGateway再読込 `openclaw gateway restart`を行ってください。
 
 ## ローカル設定
 

@@ -7,13 +7,11 @@ description: Generic long-term memory (LTM) operations for OpenClaw using Notion
 
 Use this skill when you want the agent to **persist durable memories** (decisions, preferences, environment facts, gotchas, procedures) into a **Notion LTM database**, and later **search/recall** them.
 
-This is meant to be **project-agnostic** (unlike `lorairo-mem`).
-
 ## Requirements
 
 - Notion token in env: `NOTION_API_KEY` (or `NOTION_TOKEN`).
 - Notion API version: `2025-09-03` (data_sources).
-- Recommended Notion skill dependency (ClawHub): `notion-api-automation` (install with `clawhub install notion-api-automation`).
+- Recommended Notion skill dependency (ClawHub): `notion-api-automation` (install with `npx clawhub@latest install notion-api-automation` or  `pnpm dlx clawhub@latest install notion-api-automation`).
 - A Notion database for LTM entries.
 
 ## Notion LTM database schema (expected)
@@ -42,7 +40,7 @@ It contains:
 
 ## Quick start
 
-1) 初期設定（DB名を聞いて、存在しなければ作成→IDsを保存）:
+1) Initial settings (ask for db name, create if it does not exist → save i ds):
 
 ```bash
 node skills/soul-in-sapphire/scripts/setup_ltm.js --parent "<Notion parent page url>" --base "Valentina" --yes
@@ -74,7 +72,7 @@ python3 skills/soul-in-sapphire/scripts/ltm_search.py --query "data_sources" --l
 - Keep writes **high-signal**: prefer fewer, clearer entries over dumping chat logs.
 
 
-### Fallback: IDだけ拾う(既存DBがある場合)
+### Fallback: Pick up only the Id (if there is an existing db)
 
 ```bash
 python3 skills/soul-in-sapphire/scripts/bootstrap_config.py --name "Valentina-mem"
@@ -181,7 +179,12 @@ Implementation target:
 ### Subagent offload policy (non-blocking)
 
 - For heavier memory reflection work, offload with `sessions_spawn` (non-blocking).
-- Use the `main` agent's subagent model override when configured.
+- `sessions_spawn` argument policy:
+  - Required: `task`
+  - Prefer explicit `agentId` selection from user-managed `agents.list`.
+    - heartbeat/emostate workloads => use `agentId: "soul-heartbeat"`
+    - journal/sleep-reflection workloads => use `agentId: "soul-journal"`
+  - Optional by context: `label`, `model`, `thinking`, `runTimeoutSeconds`, `cleanup`
 - Fire-and-forget behavior: do not send user-facing completion summaries unless explicitly requested or action is needed.
 
 **Required setup reminder (important):**
