@@ -11,5 +11,3 @@ node_modules/
 
 # ClawHub metadata
 .clawhub/
-scripts/bootstrap_config.py
-scripts/ltm_search.py
