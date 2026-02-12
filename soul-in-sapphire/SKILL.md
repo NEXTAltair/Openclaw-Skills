@@ -161,23 +161,24 @@ JSON
 echo '{"body":"...","source":"cron"}' | node skills/soul-in-sapphire/scripts/journal_write.js
 ```
 
-## Subagent spawn planning (single-agent friendly)
+## Subagent spawn planning (use shared builder skill)
 
-Use local JSON presets to generate `sessions_spawn` payloads with model/thinking controls.
+Use the shared skill `subagent-spawn-command-builder` to generate `sessions_spawn` payload JSON.
+Do not use `soul-in-sapphire` local planner scripts for this anymore.
 
-- Template: `skills/soul-in-sapphire/state/subagent-models.template.json`
-- Active preset: `skills/soul-in-sapphire/state/subagent-models.json`
-- Planner:
+- Template: `skills/subagent-spawn-command-builder/state/spawn-profiles.template.json`
+- Active preset: `skills/subagent-spawn-command-builder/state/spawn-profiles.json`
+- Builder:
 
 ```bash
-python3 skills/soul-in-sapphire/scripts/subagent_spawn_plan.py --profile <heartbeat|journal> --task "..."
+python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py --profile <heartbeat|journal> --task "..."
 ```
 
 Output is ready-to-use JSON for `sessions_spawn`.
 
-Planner log file:
+Builder log file:
 
-- `skills/soul-in-sapphire/state/subagent-spawn-log.jsonl`
+- `skills/subagent-spawn-command-builder/state/build-log.jsonl`
 
 ## Operational notes
 

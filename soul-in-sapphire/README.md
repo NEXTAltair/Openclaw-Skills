@@ -43,6 +43,19 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 - OpenClaw Gateway
 - Notion Integration + token
 - Notion操作用スキル(ClawHub): `notion-api-automation`
+- subagent payload生成スキル(ClawHub): `subagent-spawn-command-builder`
+
+インストール例:
+
+```bash
+# notion-api-automation
+npx clawhub@latest install notion-api-automation
+pnpm dlx clawhub@latest install notion-api-automation
+
+# subagent-spawn-command-builder
+npx clawhub@latest install subagent-spawn-command-builder
+pnpm dlx clawhub@latest install subagent-spawn-command-builder
+```
 
 ## セットアップ
 
@@ -235,22 +248,29 @@ echo '{
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
-## Subagentモデル指定(スキル内JSON運用)
+## Subagentモデル指定(共通builderスキル運用)
 
-このスキルでは、`agents.list` に依存せず、**スキル内JSONでsubagent起動パラメータを管理**する運用を採用できます。
-(single-agent運用向け)
+このスキルでは、subagent用payloadの生成を
+`subagent-spawn-command-builder` に委譲します。
 
-### 1) テンプレートを使ってstate JSONを作る
+### 1) テンプレートをコピー
 
-- テンプレート: `skills/soul-in-sapphire/state/subagent-models.template.json`
-- 実運用ファイル: `skills/soul-in-sapphire/state/subagent-models.json`
-
-`model` はユーザーが埋める前提です。
-
-### 2) プランナーで `sessions_spawn` 用payloadを生成
+- テンプレート: `skills/subagent-spawn-command-builder/state/spawn-profiles.template.json`
+- 実運用ファイル: `skills/subagent-spawn-command-builder/state/spawn-profiles.json`
 
 ```bash
-python3 skills/soul-in-sapphire/scripts/subagent_spawn_plan.py \
+cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
+   skills/subagent-spawn-command-builder/state/spawn-profiles.json
+```
+
+### 2) モデル/think/timeoutを設定
+
+`spawn-profiles.json` の `profiles.heartbeat` / `profiles.journal` を編集して使うモデルを設定します。
+
+### 3) builderで `sessions_spawn` payloadを生成
+
+```bash
+python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py \
   --profile heartbeat \
   --task "直近の感情変化を評価して必要ならemostateを1件記録"
 ```
@@ -259,8 +279,7 @@ python3 skills/soul-in-sapphire/scripts/subagent_spawn_plan.py \
 
 ### 補足
 
-- この運用では `agentId` は使いません（single-agent前提）。
-- 実行意図ログは `skills/soul-in-sapphire/state/subagent-spawn-log.jsonl` に追記されます。
+- 生成ログ: `skills/subagent-spawn-command-builder/state/build-log.jsonl`
 - 設定変更後のGateway再読込が必要な場合は `openclaw gateway restart` を実行してください。
 
 ## ローカル設定
