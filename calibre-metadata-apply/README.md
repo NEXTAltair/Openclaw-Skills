@@ -45,12 +45,19 @@
 1. このスキルを実行する環境にCalibreをインストールする
    - 必須: `calibredb`
 2. PDF調査用に `pdffonts` を使えるようにする（例: `poppler-utils`）
-3. `calibredb` と `pdffonts` が `PATH` で実行できることを確認する
-4. Calibre Content server に到達できることを確認する
-5. `--with-library` は次の形式で指定する
+3. `subagent-spawn-command-builder` を導入する（spawn payload生成に使用）
+
+```bash
+npx clawhub@latest install subagent-spawn-command-builder
+pnpm dlx clawhub@latest install subagent-spawn-command-builder
+```
+
+4. `calibredb` と `pdffonts` が `PATH` で実行できることを確認する
+5. Calibre Content server に到達できることを確認する
+6. `--with-library` は次の形式で指定する
    - `http://HOST:PORT/#LIBRARY_ID`
    - localhost前提にしない（明示的なHOST:PORTを使う）
-6. 認証が有効な場合は次を指定する
+7. 認証が有効な場合は次を指定する
    - `--username <user>`
    - `--password-env <ENV_VAR>`
 
@@ -78,9 +85,27 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
 
 長時間処理はターン分割で実行し、チャット継続性を優先します。
 
-- 開始ターン: `sessions_spawn` で軽量subagentに解析を委譲し、`scripts/run_state.py` で実行状態を記録
+- 開始ターン:
+  - `subagent-spawn-command-builder` で `sessions_spawn` payloadを生成（例: `profile=calibre-meta`）
+  - 生成payloadで軽量subagentに解析を委譲
+  - `scripts/run_state.py` で実行状態を記録
 - 完了ターン: 完了通知後、`scripts/handle_completion.py` で状態を片付けて結果を提示
 - state保存先: `state/runs.json`
+
+### `spawn-profiles.json` に追加する例（`calibre-meta`）
+
+```json
+{
+  "profiles": {
+    "calibre-meta": {
+      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
+      "thinking": "low",
+      "runTimeoutSeconds": 300,
+      "cleanup": "keep"
+    }
+  }
+}
+```
 
 ## クイックテスト（dry-run）
 

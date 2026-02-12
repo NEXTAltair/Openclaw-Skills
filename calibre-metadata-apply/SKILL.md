@@ -10,6 +10,7 @@ A skill for updating metadata of existing Calibre books.
 ## Requirements
 
 - `calibredb` must be available on PATH in the runtime environment
+- `subagent-spawn-command-builder` installed (for spawn payload generation)
 - Reachable Calibre Content server URL
   - `http://HOST:PORT/#LIBRARY_ID`
 - If authentication is enabled, pass both `--username` and `--password-env`
@@ -64,7 +65,9 @@ A skill for updating metadata of existing Calibre books.
 
 ## Analysis worker policy
 
-- Use `sessions_spawn` for heavy candidate generation
+- Use `subagent-spawn-command-builder` to generate `sessions_spawn` payload for heavy candidate generation
+  - `task` is required.
+  - Profile should include model/thinking/timeout/cleanup for this workflow.
 - Use lightweight subagent model for analysis (avoid main heavy model)
 - Keep final decisions + dry-run/apply in main
 
@@ -130,9 +133,9 @@ Return full results (not samples):
 
 ### Turn 1 (start)
 1. Main defines scope
-2. Main starts analysis via `sessions_spawn`
+2. Main generates spawn payload via `subagent-spawn-command-builder` (profile example: `calibre-meta`), then calls `sessions_spawn`
 3. Save `run_id/session_key/task` via `scripts/run_state.py upsert`
-4. Immediately tell the user this is a subagent job and state the execution model used for analysis (e.g. `moonshotai/kimi-k2.5`)
+4. Immediately tell the user this is a subagent job and state the execution model used for analysis
 5. Reply with "analysis started" and keep normal chat responsive
 
 ### Turn 2 (completion)
