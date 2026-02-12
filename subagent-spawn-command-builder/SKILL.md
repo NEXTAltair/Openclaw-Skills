@@ -57,6 +57,8 @@ Value resolution order is:
 
 ## CLI options
 
+Note: if generated tasks include Python execution steps, write commands with `python3` (not `python`).
+
 - `--profile` (required)
 - `--task` (required)
 - `--label`

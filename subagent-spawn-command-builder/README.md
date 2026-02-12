@@ -78,3 +78,4 @@ python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py \
 
 - このスキルは payload/command 生成専用です
 - `sessions_spawn` の実行はこのスキルの責務外です
+- Python実行コマンドをtaskに含める場合は `python3` を使ってください(`python` は環境によって未定義)。
