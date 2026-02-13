@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run python
 from __future__ import annotations
 import argparse, datetime as dt, hashlib, json, os, re, subprocess, tempfile
 from pathlib import Path
@@ -217,7 +217,7 @@ def main():
     fhash = "sha256:" + hashlib.sha256(src.read_bytes()).hexdigest()
 
     # status check
-    st = json.loads(run(["python3", str(SCRIPT_DIR / "analysis_db.py"), "status", "--db", ns.db, "--book-id", str(ns.book_id), "--format", ns.format]))
+    st = json.loads(run(["uv", "run", "python", str(SCRIPT_DIR / "analysis_db.py"), "status", "--db", ns.db, "--book-id", str(ns.book_id), "--format", ns.format]))
     if st.get("status") and st["status"].get("file_hash") == fhash:
         print(json.dumps({"ok": True, "skipped": True, "reason": "same_hash", "book_id": ns.book_id, "file_hash": fhash}, ensure_ascii=False))
         return
@@ -259,7 +259,7 @@ def main():
     }
 
     # upsert cache record
-    subprocess.run(["python3", str(SCRIPT_DIR / "analysis_db.py"), "upsert", "--db", ns.db],
+    subprocess.run(["uv", "run", "python", str(SCRIPT_DIR / "analysis_db.py"), "upsert", "--db", ns.db],
                    input=json.dumps(record, ensure_ascii=False), text=True, check=True)
 
     # Apply comments update directly here to keep this skill independent.

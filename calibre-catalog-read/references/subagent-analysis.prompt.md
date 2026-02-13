@@ -43,7 +43,7 @@ Do not invent these values. Confirm once at session start and reuse unless user 
 
 ## Runtime command rule
 
-- If you need to execute Python scripts, always use `python3` (never `python`).
+- If you need to execute Python scripts, always use `uv run python`.
 
 ## Strict read contract (hard requirement)
 
