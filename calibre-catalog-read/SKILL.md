@@ -1,6 +1,7 @@
 ---
 name: calibre-catalog-read
 description: Read Calibre catalog data via calibredb over a Content server, and run one-book analysis workflow that writes HTML analysis block back to comments while caching analysis state in SQLite. Use for list/search/id lookups and AI reading pipeline for a selected book.
+metadata: {"openclaw":{"requires":{"bins":["node","python3","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**","~/.config/calibre-catalog-read/auth.json"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
 # calibre-catalog-read
@@ -23,6 +24,8 @@ Use this skill for:
     - `CALIBRE_PASSWORD=<password>`
   - Then pass only `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
   - You can still override with `--username <user>` explicitly.
+  - Optional auth cache file: `~/.config/calibre-catalog-read/auth.json`
+    - Avoid `--save-plain-password` unless explicitly requested.
 
 ## Commands
 
@@ -31,7 +34,7 @@ List books (JSON):
 ```bash
 node skills/calibre-catalog-read/scripts/calibredb_read.mjs list \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --limit 50
 ```
 
@@ -40,7 +43,7 @@ Search books (JSON):
 ```bash
 node skills/calibre-catalog-read/scripts/calibredb_read.mjs search \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --query 'series:"中公文庫"'
 ```
 
@@ -49,7 +52,7 @@ Get one book by id (JSON):
 ```bash
 node skills/calibre-catalog-read/scripts/calibredb_read.mjs id \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --book-id 3
 ```
 
@@ -58,7 +61,7 @@ Run one-book pipeline (analyze + comments HTML apply + cache):
 ```bash
 python3 skills/calibre-catalog-read/scripts/run_analysis_pipeline.py \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --book-id 3 --lang ja
 ```
 
@@ -121,7 +124,7 @@ Book-reading analysis is a heavy task. Use a subagent with a lightweight model f
 - Prompt template: `references/subagent-analysis.prompt.md`
 - Input schema: `references/subagent-input.schema.json`
 - Output schema: `references/subagent-analysis.schema.json`
-- Input preparation helper: `scripts/prepare_subagent_input.py`
+- Input preparation helper: `scripts/prepare_subagent_input.mjs`
   - Splits extracted text into multiple files to avoid read-tool single-line size issues.
 
 Rules:
@@ -173,14 +176,14 @@ For Discord/chat, always run as **two separate turns**.
 - Select one target book.
 - Build spawn payload with `subagent-spawn-command-builder` (`--profile calibre-read` + run-specific `--task`).
 - Call `sessions_spawn` using that payload.
-- Record run state (`runId`) via `run_state.py upsert`.
+- Record run state (`runId`) via `run_state.mjs upsert`.
 - Reply to user with selected title + "running in background".
 - **Stop turn here.**
 
 ### Turn B: completion only (separate later turn)
 Trigger: completion announce/event for that run.
 - Run one command only (completion handler):
-  - `scripts/handle_completion.py` (`get -> apply -> remove`, and `fail` on error).
+  - `scripts/handle_completion.mjs` (`get -> apply -> remove`, and `fail` on error).
 - If `runId` is missing, handler returns `stale_or_duplicate` and does nothing.
 - Send completion/failure reply from handler result.
 
@@ -222,5 +225,5 @@ node skills/calibre-catalog-read/scripts/handle_completion.mjs \
   --run-id <RUN_ID> \
   --analysis-json /tmp/calibre_<BOOK_ID>/analysis.json \
   --with-library "http://HOST:PORT/#LIBRARY_ID" \
-  --username user --password-env CALIBRE_PASSWORD --lang ja
+  --password-env CALIBRE_PASSWORD --lang ja
 ```

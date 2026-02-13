@@ -23,6 +23,8 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
    - `CALIBRE_USERNAME=<user>`
    - `CALIBRE_PASSWORD=<password>`
    - 実行時は `--password-env CALIBRE_PASSWORD` を渡す(ユーザー名はenvから自動読込)。
+   - 任意で `~/.config/calibre-catalog-read/auth.json` に認証キャッシュ可能。
+   - `--save-plain-password` は平文保存のため、明示指示がない限り使わない。
 
 ## 重要
 
