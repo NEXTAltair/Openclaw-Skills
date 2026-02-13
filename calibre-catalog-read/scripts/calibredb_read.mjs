@@ -49,7 +49,8 @@ function saveAuthFile(path, { username, password, passwordEnv }) {
 function resolveAuth(args) {
   const authFile = String(args['auth-file'] || DEFAULT_AUTH_FILE);
   const saved = loadAuthFile(authFile);
-  const username = args.username ? String(args.username) : (saved.username || '');
+  const envUser = (process.env.CALIBRE_USERNAME || '').trim();
+  const username = args.username ? String(args.username) : (saved.username || envUser || '');
 
   let password = args.password ? String(args.password) : '';
   const explicitEnv = args['password-env'] ? String(args['password-env']) : '';

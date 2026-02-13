@@ -19,7 +19,10 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
 4. Calibre Content serverへ到達できることを確認する。
 5. 接続先は必ず明示的な `HOST:PORT` を使う。
    - `http://HOST:PORT/#LIBRARY_ID`
-6. 認証が有効な場合は `username` と `password env` を指定する。
+6. 認証が有効な場合は `~/.openclaw/.env` に設定する(推奨)。
+   - `CALIBRE_USERNAME=<user>`
+   - `CALIBRE_PASSWORD=<password>`
+   - 実行時は `--password-env CALIBRE_PASSWORD` を渡す(ユーザー名はenvから自動読込)。
 
 ## 重要
 
@@ -33,7 +36,7 @@ WindowsではDefender Controlled Folder Accessの影響でメタデータ/ファ
 ```bash
 node scripts/calibredb_read.mjs list \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --limit 5
 ```
 
@@ -42,7 +45,7 @@ node scripts/calibredb_read.mjs list \
 ```bash
 python3 scripts/run_analysis_pipeline.py \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
-  --username user --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --book-id 3 --lang ja
 ```
 
@@ -51,7 +54,7 @@ python3 scripts/run_analysis_pipeline.py \
 readツールの行サイズ制限を避けるため、抽出テキストを分割し、`subagent_input.json` 経由で `source_files` を渡します。
 
 ```bash
-python3 scripts/prepare_subagent_input.py \
+node scripts/prepare_subagent_input.mjs \
   --book-id 3 --title "<title>" --lang ja \
   --text-path /tmp/book_3.txt --out-dir /tmp/calibre_subagent_3
 ```
@@ -69,12 +72,12 @@ python3 scripts/prepare_subagent_input.py \
 - 対象選定
 - `subagent-spawn-command-builder` で `sessions_spawn` payloadを生成
 - 生成payloadでspawn
-- `run_state.py upsert`
+- `run_state.mjs upsert`
 - 即時ACK
 
 2) 完了ターン(後続)
 - 完了イベント
-- `handle_completion.py`(内部で `get -> apply -> remove/fail`)
+- `handle_completion.mjs`(内部で `get -> apply -> remove/fail`)
 
 spawnと同一ターンで `poll/wait/apply` を行わないでください。
 

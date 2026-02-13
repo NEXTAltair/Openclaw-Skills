@@ -17,9 +17,12 @@ Use this skill for:
 - Reachable Calibre Content server URL in `--with-library` format:
   - `http://HOST:PORT/#LIBRARY_ID`
 - Do not assume localhost/127.0.0.1; always pass explicit reachable `HOST:PORT`.
-- If auth is enabled, pass:
-  - `--username <user>`
-  - `--password-env <ENV_VAR_NAME>`
+- If auth is enabled:
+  - Preferred: set in `/home/altair/.openclaw/.env`
+    - `CALIBRE_USERNAME=<user>`
+    - `CALIBRE_PASSWORD=<password>`
+  - Then pass only `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
+  - You can still override with `--username <user>` explicitly.
 
 ## Commands
 
@@ -65,14 +68,14 @@ Initialize DB schema:
 
 ```bash
 python3 skills/calibre-catalog-read/scripts/analysis_db.py init \
-  --db /home/altair/clawd/data/calibre_analysis.sqlite
+  --db skills/calibre-catalog-read/state/calibre_analysis.sqlite
 ```
 
 Check current hash state:
 
 ```bash
 python3 skills/calibre-catalog-read/scripts/analysis_db.py status \
-  --db /home/altair/clawd/data/calibre_analysis.sqlite \
+  --db skills/calibre-catalog-read/state/calibre_analysis.sqlite \
   --book-id 3 --format EPUB
 ```
 
@@ -149,7 +152,7 @@ Required runtime sequence:
 1. Main agent prepares `subagent_input.json` + chunked `source_files` from extracted text.
    - Use:
    ```bash
-   python3 skills/calibre-catalog-read/scripts/prepare_subagent_input.py \
+   node skills/calibre-catalog-read/scripts/prepare_subagent_input.mjs \
      --book-id <id> --title "<title>" --lang ja \
      --text-path /tmp/book_<id>.txt --out-dir /tmp/calibre_subagent_<id>
    ```
@@ -209,12 +212,12 @@ Use helper scripts (avoid ad-hoc env var mistakes):
 
 ```bash
 # Turn A: register running task
-python3 skills/calibre-catalog-read/scripts/run_state.py upsert \
+node skills/calibre-catalog-read/scripts/run_state.mjs upsert \
   --state skills/calibre-catalog-read/state/runs.json \
   --run-id <RUN_ID> --book-id <BOOK_ID> --title "<TITLE>"
 
 # Turn B: completion handler (preferred)
-python3 skills/calibre-catalog-read/scripts/handle_completion.py \
+node skills/calibre-catalog-read/scripts/handle_completion.mjs \
   --state skills/calibre-catalog-read/state/runs.json \
   --run-id <RUN_ID> \
   --analysis-json /tmp/calibre_<BOOK_ID>/analysis.json \
