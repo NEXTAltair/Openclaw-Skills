@@ -13,7 +13,11 @@ A skill for updating metadata of existing Calibre books.
 - `subagent-spawn-command-builder` installed (for spawn payload generation)
 - Reachable Calibre Content server URL
   - `http://HOST:PORT/#LIBRARY_ID`
-- If authentication is enabled, pass both `--username` and `--password-env`
+- If authentication is enabled, prefer `/home/altair/.openclaw/.env`:
+  - `CALIBRE_USERNAME=<user>`
+  - `CALIBRE_PASSWORD=<password>`
+- Pass `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
+- You can still override explicitly with `--username <user>`.
 - Optional auth cache: `--save-auth` (default file: `~/.config/calibre-metadata-apply/auth.json`)
 
 ## Supported fields
@@ -135,14 +139,14 @@ Return full results (not samples):
 ### Turn 1 (start)
 1. Main defines scope
 2. Main generates spawn payload via `subagent-spawn-command-builder` (profile example: `calibre-meta`), then calls `sessions_spawn`
-3. Save `run_id/session_key/task` via `scripts/run_state.py upsert`
+3. Save `run_id/session_key/task` via `scripts/run_state.mjs upsert`
 4. Immediately tell the user this is a subagent job and state the execution model used for analysis
 5. Reply with "analysis started" and keep normal chat responsive
 
 ### Turn 2 (completion)
 1. Receive subagent completion notice
 2. Save result JSON
-3. Complete state handling via `scripts/handle_completion.py --run-id ... --result-json ...`
+3. Complete state handling via `scripts/handle_completion.mjs --run-id ... --result-json ...`
 4. Return summarized proposal (apply only when needed)
 
 Run state file:
@@ -168,16 +172,18 @@ Run state file:
 Dry-run:
 
 ```bash
-cat changes.jsonl | python3 skills/calibre-metadata-apply/scripts/calibredb_apply.py \
+cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs \
   --with-library "http://127.0.0.1:8080/#MyLibrary" \
+  --password-env CALIBRE_PASSWORD \
   --lang ja
 ```
 
 Apply:
 
 ```bash
-cat changes.jsonl | python3 skills/calibre-metadata-apply/scripts/calibredb_apply.py \
+cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs \
   --with-library "http://127.0.0.1:8080/#MyLibrary" \
+  --password-env CALIBRE_PASSWORD \
   --apply
 ```
 

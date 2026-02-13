@@ -92,8 +92,8 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
 - 開始ターン:
   - `subagent-spawn-command-builder` で `sessions_spawn` payloadを生成（例: `profile=calibre-meta`）
   - 生成payloadで軽量subagentに解析を委譲
-  - `scripts/run_state.py` で実行状態を記録
-- 完了ターン: 完了通知後、`scripts/handle_completion.py` で状態を片付けて結果を提示
+  - `scripts/run_state.mjs` で実行状態を記録
+- 完了ターン: 完了通知後、`scripts/handle_completion.mjs` で状態を片付けて結果を提示
 - state保存先: `state/runs.json`
 
 ### `spawn-profiles.json` に追加する例（`calibre-meta`）
@@ -116,9 +116,9 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
 初回だけ認証情報を保存しておくと、以後は `--username` / `--password-env` を省略できます。
 
 ```bash
-cat references/changes.example.jsonl | python3 scripts/calibredb_apply.py \
+cat references/changes.example.jsonl | node scripts/calibredb_apply.mjs \
   --with-library "http://127.0.0.1:8080/#MyLibrary" \
-  --username "your_user" --password-env CALIBRE_PASSWORD \
+  --password-env CALIBRE_PASSWORD \
   --save-auth
 ```
 
@@ -131,6 +131,6 @@ cat references/changes.example.jsonl | python3 scripts/calibredb_apply.py \
 ## クイックテスト（dry-run）
 
 ```bash
-cat references/changes.example.jsonl | python3 scripts/calibredb_apply.py \
+cat references/changes.example.jsonl | node scripts/calibredb_apply.mjs \
   --with-library "http://127.0.0.1:8080/#MyLibrary"
 ```
