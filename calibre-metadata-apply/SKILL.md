@@ -1,6 +1,7 @@
 ---
 name: calibre-metadata-apply
 description: Apply metadata updates to existing Calibre books via calibredb over a Content server. Use for controlled metadata edits after target IDs are confirmed by a read-only lookup.
+metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json","~/.config/calibre-metadata-apply/auth.json","~/.config/calibre-metadata-apply/config.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
 # calibre-metadata-apply
@@ -11,6 +12,7 @@ A skill for updating metadata of existing Calibre books.
 
 - `calibredb` must be available on PATH in the runtime environment
 - `subagent-spawn-command-builder` installed (for spawn payload generation)
+- `pdffonts` is optional/recommended for PDF evidence checks
 - Reachable Calibre Content server URL
   - `http://HOST:PORT/#LIBRARY_ID`
 - If authentication is enabled, prefer `/home/altair/.openclaw/.env`:
@@ -75,6 +77,22 @@ A skill for updating metadata of existing Calibre books.
   - Profile should include model/thinking/timeout/cleanup for this workflow.
 - Use lightweight subagent model for analysis (avoid main heavy model)
 - Keep final decisions + dry-run/apply in main
+
+## Data flow disclosure
+
+- Local execution:
+  - Build `calibredb set_metadata` commands from JSONL.
+  - Read/write local state files (`state/runs.json`) and optional auth/config files under `~/.config/calibre-metadata-apply/`.
+- Subagent execution (optional for heavy candidate generation):
+  - Uses `sessions_spawn` via `subagent-spawn-command-builder`.
+  - Text/metadata sent to subagent can reach model endpoints configured by runtime profile.
+- Remote write:
+  - `calibredb set_metadata` updates metadata on the target Calibre Content server.
+
+Security rules:
+- Do not use `--save-plain-password` unless explicitly instructed by the user.
+- Prefer env-based password (`--password-env CALIBRE_PASSWORD`) over inline `--password`.
+- If user does not want external model/subagent processing, keep flow local and skip subagent orchestration.
 
 ## Long-run turn-split policy (library-wide)
 

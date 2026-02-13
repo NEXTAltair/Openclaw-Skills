@@ -19,8 +19,20 @@ function parseArgs(argv) {
   return out;
 }
 
+function buildSafeEnv() {
+  return {
+    PATH: process.env.PATH || '',
+    HOME: process.env.HOME || '',
+    LANG: process.env.LANG || 'C.UTF-8',
+    LC_ALL: process.env.LC_ALL || '',
+    LC_CTYPE: process.env.LC_CTYPE || '',
+    SYSTEMROOT: process.env.SYSTEMROOT || '',
+    WINDIR: process.env.WINDIR || '',
+  };
+}
+
 function runNode(args) {
-  const cp = spawnSync('node', [RUN_STATE, ...args], { encoding: 'utf-8' });
+  const cp = spawnSync('node', [RUN_STATE, ...args], { encoding: 'utf-8', env: buildSafeEnv() });
   if (cp.status !== 0) throw new Error((cp.stderr || cp.stdout || '').trim());
   return JSON.parse((cp.stdout || '{}').trim() || '{}');
 }

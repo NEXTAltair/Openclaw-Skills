@@ -26,8 +26,20 @@ function parseArgs(argv) {
   return out;
 }
 
+function buildSafeEnv() {
+  return {
+    PATH: process.env.PATH || '',
+    HOME: process.env.HOME || '',
+    LANG: process.env.LANG || 'C.UTF-8',
+    LC_ALL: process.env.LC_ALL || '',
+    LC_CTYPE: process.env.LC_CTYPE || '',
+    SYSTEMROOT: process.env.SYSTEMROOT || '',
+    WINDIR: process.env.WINDIR || '',
+  };
+}
+
 function run(cmd) {
-  const cp = spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf-8' });
+  const cp = spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf-8', env: buildSafeEnv() });
   return { rc: cp.status || 0, out: cp.stdout || '', err: cp.stderr || '' };
 }
 function runOk(cmd) {
