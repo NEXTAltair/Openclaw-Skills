@@ -167,7 +167,7 @@ pnpm dlx clawhub@latest install notion-api-automation
 export NOTION_API_KEY="..."
 ```
 
-(OpenClaw運用なら `/home/altair/.openclaw/.env` に `NOTION_API_KEY=...`)
+(OpenClaw運用なら `~/.openclaw/.env` に `NOTION_API_KEY=...`)
 
 ### 3) DB作成 + config生成
 
