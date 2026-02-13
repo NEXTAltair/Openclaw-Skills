@@ -59,10 +59,22 @@ function removeRun(p, runId) {
 }
 
 function runApply(args, bookId) {
-  const cmd = ['python3', PIPELINE_PY, '--with-library', args['with-library'], '--book-id', String(bookId), '--lang', String(args.lang || 'ja'), '--analysis-json', String(args['analysis-json'])];
+  const cmd = ['uv', 'run', 'python', PIPELINE_PY, '--with-library', args['with-library'], '--book-id', String(bookId), '--lang', String(args.lang || 'ja'), '--analysis-json', String(args['analysis-json'])];
   if (args.username) cmd.push('--username', String(args.username));
   if (args['password-env']) cmd.push('--password-env', String(args['password-env']));
-  return spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf-8', env: process.env });
+
+  const safeEnv = {
+    PATH: process.env.PATH || '',
+    HOME: process.env.HOME || '',
+    LANG: process.env.LANG || 'C.UTF-8',
+    LC_ALL: process.env.LC_ALL || '',
+    LC_CTYPE: process.env.LC_CTYPE || '',
+    CALIBRE_USERNAME: process.env.CALIBRE_USERNAME || '',
+  };
+  const penv = String(args['password-env'] || '');
+  if (penv && process.env[penv]) safeEnv[penv] = process.env[penv];
+
+  return spawnSync(cmd[0], cmd.slice(1), { encoding: 'utf-8', env: safeEnv });
 }
 
 function main() {

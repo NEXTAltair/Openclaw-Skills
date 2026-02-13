@@ -1,7 +1,7 @@
 ---
 name: calibre-catalog-read
 description: Read Calibre catalog data via calibredb over a Content server, and run one-book analysis workflow that writes HTML analysis block back to comments while caching analysis state in SQLite. Use for list/search/id lookups and AI reading pipeline for a selected book.
-metadata: {"openclaw":{"requires":{"bins":["node","python3","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**","~/.config/calibre-catalog-read/auth.json"],"modifiesRemoteData":["calibre:comments-metadata"]}}
+metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**","~/.config/calibre-catalog-read/auth.json"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
 # calibre-catalog-read
@@ -59,7 +59,7 @@ node skills/calibre-catalog-read/scripts/calibredb_read.mjs id \
 Run one-book pipeline (analyze + comments HTML apply + cache):
 
 ```bash
-python3 skills/calibre-catalog-read/scripts/run_analysis_pipeline.py \
+uv run python skills/calibre-catalog-read/scripts/run_analysis_pipeline.py \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
   --password-env CALIBRE_PASSWORD \
   --book-id 3 --lang ja
@@ -70,14 +70,14 @@ python3 skills/calibre-catalog-read/scripts/run_analysis_pipeline.py \
 Initialize DB schema:
 
 ```bash
-python3 skills/calibre-catalog-read/scripts/analysis_db.py init \
+uv run python skills/calibre-catalog-read/scripts/analysis_db.py init \
   --db skills/calibre-catalog-read/state/calibre_analysis.sqlite
 ```
 
 Check current hash state:
 
 ```bash
-python3 skills/calibre-catalog-read/scripts/analysis_db.py status \
+uv run python skills/calibre-catalog-read/scripts/analysis_db.py status \
   --db skills/calibre-catalog-read/state/calibre_analysis.sqlite \
   --book-id 3 --format EPUB
 ```
@@ -129,7 +129,7 @@ Book-reading analysis is a heavy task. Use a subagent with a lightweight model f
 
 Rules:
 - Use subagent only for heavy analysis generation; keep main agent lightweight and non-blocking.
-- In this environment, Python commands must use `python3` (never `python`).
+- In this environment, Python commands must use `uv run python`.
 - Use the strict prompt template (`references/subagent-analysis.prompt.md`) as mandatory base; do not send ad-hoc relaxed read instructions.
 - Keep final DB upsert and Calibre metadata apply in main agent.
 - Process one book per run.

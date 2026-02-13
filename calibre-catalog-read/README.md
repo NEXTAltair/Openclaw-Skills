@@ -45,7 +45,7 @@ node scripts/calibredb_read.mjs list \
 ## クイックテスト(1冊パイプライン)
 
 ```bash
-python3 scripts/run_analysis_pipeline.py \
+uv run python scripts/run_analysis_pipeline.py \
   --with-library "http://192.168.11.20:8080/#Calibreライブラリ" \
   --password-env CALIBRE_PASSWORD \
   --book-id 3 --lang ja
@@ -116,7 +116,7 @@ spawnと同一ターンで `poll/wait/apply` を行わないでください。
 内部実装コマンド(低レベル)は次のとおり:
 
 ```bash
-python3 ../subagent-spawn-command-builder/scripts/build_spawn_payload.py \
+uv run python ../subagent-spawn-command-builder/scripts/build_spawn_payload.py \
   --profile calibre-read \
   --task "<analysis task text based on references/subagent-analysis.prompt.md>"
 ```
