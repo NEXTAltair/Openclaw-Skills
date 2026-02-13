@@ -24,7 +24,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-import { createPage } from './notion_client.js';
+import { createPage } from './notionctl_bridge.js';
 
 function die(msg) {
   process.stderr.write(String(msg) + '\n');

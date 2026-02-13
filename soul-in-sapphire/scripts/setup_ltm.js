@@ -30,7 +30,7 @@ import {
   getDatabase,
   patchDataSource,
   relationSingleProperty,
-} from './notion_client.js';
+} from './notionctl_bridge.js';
 
 function die(msg) {
   process.stderr.write(String(msg) + '\n');
