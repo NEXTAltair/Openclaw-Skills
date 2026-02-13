@@ -1,6 +1,7 @@
 ---
 name: soul-in-sapphire
 description: Generic long-term memory (LTM) operations for OpenClaw using Notion (2025-09-03 data_sources). Use for durable memory writes/search, emotion-state ticks, journal writes, and model-controlled subagent spawn planning via local JSON presets.
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"localReads":["~/.openclaw/openclaw.json","~/.config/soul-in-sapphire/config.json"]}}
 ---
 
 # soul-in-sapphire (Notion LTM)
@@ -23,6 +24,8 @@ The goal is continuity and growth, not archival volume.
 - Notion token: `NOTION_API_KEY` (or `NOTION_TOKEN`)
 - Notion API version: `2025-09-03`
 - Local config: `~/.config/soul-in-sapphire/config.json`
+- Dependency skill: `notion-api-automation` (`scripts/notionctl.mjs` is executed via local child process)
+- Local workspace discovery read: `~/.openclaw/openclaw.json` (used to resolve workspace/skill path)
 
 ## Required Notion databases and schema
 
