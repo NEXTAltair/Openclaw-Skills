@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function expandHome(p) {
   if (!p) return p;
@@ -11,22 +12,15 @@ function expandHome(p) {
   return p;
 }
 
-function readWorkspaceFromConfig() {
-  const cfgPath = expandHome(process.env.OPENCLAW_CONFIG_PATH || '~/.openclaw/openclaw.json');
-  try {
-    if (!fs.existsSync(cfgPath)) return null;
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'));
-    const ws = cfg?.agents?.defaults?.workspace;
-    return ws ? expandHome(String(ws)) : null;
-  } catch {
-    return null;
-  }
-}
-
 function notionctlPath() {
-  const ws = readWorkspaceFromConfig() || path.resolve(process.cwd(), '..', '..', '..');
-  const p = path.join(ws, 'skills', 'notion-api-automation', 'scripts', 'notionctl.mjs');
-  if (!fs.existsSync(p)) throw new Error(`notionctl not found: ${p}`);
+  const explicit = process.env.NOTIONCTL_PATH ? expandHome(process.env.NOTIONCTL_PATH) : null;
+  if (explicit) {
+    if (!fs.existsSync(explicit)) throw new Error(`NOTIONCTL_PATH not found: ${explicit}`);
+    return explicit;
+  }
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const p = path.resolve(here, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs');
+  if (!fs.existsSync(p)) throw new Error(`notionctl not found (set NOTIONCTL_PATH to override): ${p}`);
   return p;
 }
 

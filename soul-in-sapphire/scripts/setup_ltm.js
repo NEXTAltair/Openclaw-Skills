@@ -12,16 +12,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const JSON5 = (() => {
-  try {
-    return require('json5');
-  } catch {
-    return null;
-  }
-})();
+import { fileURLToPath } from 'node:url';
 
 import {
   extractPageId,
@@ -65,28 +56,15 @@ function expandHome(p) {
   return p;
 }
 
-function readOpenClawWorkspaceFromConfig() {
-  const cfgPath = expandHome(process.env.OPENCLAW_CONFIG_PATH || path.join('~', '.openclaw', 'openclaw.json'));
-  try {
-    if (!fs.existsSync(cfgPath)) return null;
-    const raw = fs.readFileSync(cfgPath, 'utf-8');
-    const cfg = JSON5 ? JSON5.parse(raw) : JSON.parse(raw);
-    const ws = cfg?.agents?.defaults?.workspace;
-    return ws ? expandHome(String(ws)) : null;
-  } catch {
-    // If config is malformed/unreadable, fall back to cwd-based resolution.
-    return null;
-  }
-}
-
 function parseArgs(argv) {
-  const fallbackWorkspaceRoot = path.resolve(process.cwd(), '..', '..', '..');
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const fallbackWorkspaceRoot = path.resolve(here, '..', '..', '..');
   const out = {
     parent: null,
     base: null,
     yes: false,
     outPath: path.join(os.homedir(), '.config', 'soul-in-sapphire', 'config.json'),
-    workspaceRoot: readOpenClawWorkspaceFromConfig() || fallbackWorkspaceRoot,
+    workspaceRoot: fallbackWorkspaceRoot,
   };
   const args = argv.slice(2);
   for (let i = 0; i < args.length; i++) {
