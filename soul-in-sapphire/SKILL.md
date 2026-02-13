@@ -134,13 +134,13 @@ echo '{
   "tags":["notion","openclaw"],
   "content":"Use /v1/data_sources/{id}/query.",
   "confidence":"high"
-}' | python3 skills/soul-in-sapphire/scripts/ltm_write.py
+}' | node skills/soul-in-sapphire/scripts/ltm_write.js
 ```
 
 ### 3) LTM search
 
 ```bash
-python3 skills/soul-in-sapphire/scripts/ltm_search.py --query "data_sources" --limit 5
+node skills/soul-in-sapphire/scripts/ltm_search.js --query "data_sources" --limit 5
 ```
 
 ### 4) Emotion/state tick
