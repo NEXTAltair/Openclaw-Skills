@@ -3,7 +3,8 @@
  * bootstrap_config.js
  *
  * Create ~/.config/diy-pc-ingest/config.json by discovering Notion IDs via /v1/search.
- * Requires NOTION_API_KEY (or NOTION_TOKEN) and that the target data sources are shared with the integration.
+ * Uses notion-api-automation/scripts/notionctl.mjs for Notion auth + API calls.
+ * Ensure the target data sources are shared with the integration.
  *
  * Usage:
  *   node scripts/bootstrap_config.js
@@ -11,39 +12,35 @@
  *   node scripts/bootstrap_config.js --names pcconfig=PCConfig pcinput=PCInput storage=ストレージ enclosure=エンクロージャー
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('node:child_process');
 
-const API = 'https://api.notion.com/v1';
 const NOTION_VERSION = process.env.NOTION_VERSION || '2025-09-03';
+const NOTIONCTL_PATH = path.resolve(__dirname, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs');
 
 function die(msg, code = 1) {
   process.stderr.write(String(msg) + '\n');
   process.exit(code);
 }
 
-function token() {
-  const t = (process.env.NOTION_API_KEY || process.env.NOTION_TOKEN || '').trim();
-  if (!t) die('Missing NOTION_API_KEY (or NOTION_TOKEN) environment variable.');
-  return t;
-}
-
 async function req(method, p, body) {
-  const res = await fetch(API + p, {
-    method,
-    headers: {
-      'Authorization': `Bearer ${token()}`,
-      'Notion-Version': NOTION_VERSION,
-      'Content-Type': 'application/json',
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${p}: ${text}`);
-  }
-  return text ? JSON.parse(text) : {};
+  const apiPath = String(p).startsWith('/v1/') ? String(p) : `/v1${String(p).startsWith('/') ? '' : '/'}${String(p)}`;
+  const args = [
+    NOTIONCTL_PATH,
+    'api',
+    '--compact',
+    '--method', String(method).toUpperCase(),
+    '--path', apiPath,
+  ];
+  if (body !== undefined) args.push('--body-json', JSON.stringify(body));
+
+  const env = { ...process.env, NOTION_VERSION };
+  const out = execFileSync('node', args, { encoding: 'utf-8', env }).trim();
+  const obj = out ? JSON.parse(out) : {};
+  if (!obj.ok) throw new Error(`notionctl api not ok: ${out}`);
+  return obj.result || {};
 }
 
 function plainTitle(obj) {

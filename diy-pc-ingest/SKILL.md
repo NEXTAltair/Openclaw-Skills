@@ -16,10 +16,9 @@ This skill is intended to be shared. Do **not** hardcode your Notion IDs or toke
 - `notion.targets.*.data_source_id` (for schema/query)
 - `notion.targets.*.database_id` (for creating pages)
 
-3) Provide a Notion integration token (choose one):
+3) Provide Notion auth for `notion-api-automation` (`notionctl`):
 - env: `NOTION_API_KEY` (recommended)
-- or `~/.config/notion/api_key` (legacy local path)
-- or inline `notion.api_key` in `config.json` (not recommended if you publish/share configs)
+- or `~/.config/notion/api_key`
 
 Notes:
 - This skill uses Notion-Version `2025-09-03` by default.
@@ -40,22 +39,35 @@ Use **data_sources** endpoints for schema/query, and **pages** endpoint for row 
 
 2) **Extract fields** (best-effort). Prefer Japanese column names as they exist in each table.
 
-3) **Enrich specs using web_search/web_fetch** when it reduces user work (e.g., bay count, interface, capacity, form factor). Keep it minimal; don’t overfill.
+3) **Enrich specs using web_search/web_fetch** when it reduces user work (e.g., bay count, interface, capacity, form factor). Keep it minimal; don't overfill.
 
 4) **Ask follow-up questions** only for fields needed to avoid ambiguity or bad joins.
-   - **ストレージ**: Serial missing → ask for serial (or confirm creating as “暫定/シリアル不明”).
+   - **ストレージ**: Serial missing → ask for serial (or confirm creating as "暫定/シリアル不明").
    - **エンクロージャー**: ベイ数 or USB/Thunderbolt/LAN unclear → ask.
    - **PCConfig**: Identifier/型番 missing but needed to match existing row → ask.
+- If a key collides with multiple rows, do not write; ask user.
 
-5) **Upsert into Notion** using `scripts/notion_apply_records.js`:
+5) **Search existing records in Notion** using `scripts/notion_apply_records.js` (auto-discovery mode):
+   - Provide JSONL records (one per item) on stdin.
+   - Script will:
+     - find an existing row by key (see below)
+     - report what would be created/updated/skipped without making changes
+     - **Do not write anything** (no create/update operations)
+   - Use this to preview results before actual upsert.
+
+6) **Review search results** and confirm with user:
+   - Show what would be created/updated/skipped
+   - Ask for confirmation before proceeding to actual upsert
+
+7) **Upsert into Notion** using `scripts/notion_apply_records.js`:
    - Provide JSONL records (one per item) on stdin.
    - Script will:
      - find an existing row by key (see below)
      - patch only missing fields unless `overwrite=true`
      - otherwise create a new row
 
-6) Report results (created/updated/skipped) and link any created rows.
-
+8) Report results (created/updated/skipped) and link any created rows.
+3
 ## Upsert keys (rules)
 
 - **ストレージ**: `シリアル` (exact) is the primary key. If the existing row was created without serial, allow a safe fallback match by title + (optional) `購入日`/`価格(円)` to support post-fill of serial/health/scan-date.

@@ -140,7 +140,7 @@ clawhub install notion-api-automation
 export NOTION_API_KEY="<your notion token>"
 ```
 
-OpenClawでは `/home/altair/.openclaw/.env` に書いて起動時に環境変数として読ませる
+OpenClawでは `~/.openclaw/.env` に書いて起動時に環境変数として読ませる
 
 ### 3) NotionのIDを自動検出して設定(推奨)
 

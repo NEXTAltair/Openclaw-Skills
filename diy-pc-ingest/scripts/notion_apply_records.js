@@ -9,16 +9,17 @@
  *
  * Config:
  * - DIY_PC_INGEST_CONFIG (path) OR ~/.config/diy-pc-ingest/config.json
- * - Notion token: NOTION_API_KEY (or NOTION_TOKEN) env, else NOTION_API_KEY_FILE, else ~/.config/notion/api_key
+ * - Notion auth/API is delegated to notion-api-automation/scripts/notionctl.mjs
  * - Notion version: NOTION_VERSION env or default 2025-09-03
  */
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { execFileSync } = require('node:child_process');
 
-const API = 'https://api.notion.com/v1';
 const DEFAULT_NOTION_VERSION = '2025-09-03';
+const NOTIONCTL_PATH = path.resolve(__dirname, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs');
 
 function die(msg) {
   process.stderr.write(String(msg) + '\n');
@@ -111,22 +112,6 @@ function notionVersion(cfg) {
   return (cfg?.notion?.version || process.env.NOTION_VERSION || DEFAULT_NOTION_VERSION).trim();
 }
 
-function notionApiKey(cfg) {
-  const envTok = (process.env.NOTION_API_KEY || process.env.NOTION_TOKEN || '').trim();
-  if (envTok) return envTok;
-
-  const inlineTok = (cfg?.notion?.api_key || '').trim();
-  if (inlineTok && !inlineTok.includes('PUT_YOUR_')) return inlineTok;
-
-  const keyPath = (process.env.NOTION_API_KEY_FILE || path.join(os.homedir(), '.config', 'notion', 'api_key'));
-  if (!fs.existsSync(keyPath)) {
-    die(`Notion api_key not found: ${keyPath}. Set NOTION_API_KEY env (recommended) or create the file.`);
-  }
-  const key = fs.readFileSync(keyPath, 'utf-8').trim();
-  if (!key) die(`Notion api_key empty: ${keyPath}`);
-  return key;
-}
-
 function idsFromConfig(cfg) {
   const t = cfg?.notion?.targets || {};
   // Public-safe default structure: users must fill IDs.
@@ -151,22 +136,23 @@ function idsFromConfig(cfg) {
 }
 
 async function notionReq(cfg, method, apiPath, body) {
-  const url = API + apiPath;
-  const headers = {
-    'Authorization': `Bearer ${notionApiKey(cfg)}`,
-    'Notion-Version': notionVersion(cfg),
-  };
-  let payload;
-  if (body !== undefined && body !== null) {
-    headers['Content-Type'] = 'application/json';
-    payload = JSON.stringify(body);
-  }
-  const res = await fetch(url, { method, headers, body: payload });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${apiPath}: ${text}`);
-  }
-  return text ? JSON.parse(text) : {};
+  const p = String(apiPath).startsWith('/v1/') ? String(apiPath) : `/v1${String(apiPath).startsWith('/') ? '' : '/'}${String(apiPath)}`;
+  const args = [
+    NOTIONCTL_PATH,
+    'api',
+    '--compact',
+    '--method', String(method).toUpperCase(),
+    '--path', p,
+  ];
+  if (body !== undefined && body !== null) args.push('--body-json', JSON.stringify(body));
+
+  const env = { ...process.env };
+  env.NOTION_VERSION = notionVersion(cfg);
+
+  const out = execFileSync('node', args, { encoding: 'utf-8', env }).trim();
+  const obj = out ? JSON.parse(out) : {};
+  if (!obj.ok) throw new Error(`notionctl api not ok: ${out}`);
+  return obj.result || {};
 }
 
 function normalize(s) {
