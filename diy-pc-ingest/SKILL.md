@@ -1,6 +1,7 @@
 ---
 name: diy-pc-ingest
 description: Ingest pasted PC parts purchase/config text (Discord message receipts, bullet lists) into Notion DIY_PC tables (PCConfig, ストレージ, エンクロージャー, PCInput). Use when the user pastes raw purchase logs/spec notes and wants the AI to classify, enrich via web search, ask follow-up questions for unknowns, and then upsert rows into the correct Notion data sources using the 2025-09-03 data_sources API.
+metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","DIY_PC_INGEST_CONFIG"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"localReads":["~/.config/diy-pc-ingest/config.json","~/.config/notion/api_key"],"localWrites":["~/.config/diy-pc-ingest/config.json"],"network":["notion-api","optional:web_search/web_fetch"]}}
 ---
 
 # diy-pc-ingest
@@ -23,6 +24,17 @@ This skill is intended to be shared. Do **not** hardcode your Notion IDs or toke
 Notes:
 - This skill uses Notion-Version `2025-09-03` by default.
 - Targets are read at runtime from config; see `references/config.example.json`.
+
+## Data flow disclosure
+
+- Local input: pasted receipts/spec notes are parsed locally.
+- External enrichment (optional): `web_search`/`web_fetch` may send partial product text to external web providers.
+- Notion write path: records are queried/upserted via `notion-api-automation/scripts/notionctl.mjs`.
+- Local config: `~/.config/diy-pc-ingest/config.json` is read/written.
+
+Security rules:
+- If user does not want external enrichment, skip `web_search`/`web_fetch` and proceed with local extraction only.
+- Use minimal-scope Notion integration permissions (only target DIY_PC data sources).
 
 ## Canonical Notion targets
 
