@@ -1,7 +1,0 @@
-{
-  "mediaopsDir": "<workspace>/mediaops",
-  "db": "<host-data-root>/db/mediaops.sqlite",
-  "sourceRoot": "<source-root>",
-  "destRoot": "<dest-root>",
-  "hostDataRoot": "<host-data-root>"
-}
