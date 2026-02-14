@@ -100,8 +100,14 @@ async function loadConfig() {
   let p = process.env.DIY_PC_INGEST_CONFIG;
   if (!p) p = path.join(os.homedir(), '.config', 'diy-pc-ingest', 'config.json');
   if (!fs.existsSync(p)) {
-    // Auto-bootstrap: discover Notion IDs via /v1/search when config is missing.
-    // Requires NOTION_API_KEY and that target DBs are shared with the integration.
+    const allowBootstrap = String(process.env.DIY_PC_INGEST_BOOTSTRAP || '').trim() === '1';
+    if (!allowBootstrap) {
+      throw new Error(
+        `config not found: ${p}\n` +
+        `Create it manually from references/config.example.json, or run bootstrap explicitly:\n` +
+        `DIY_PC_INGEST_BOOTSTRAP=1 node skills/diy-pc-ingest/scripts/notion_apply_records.js < records.jsonl`
+      );
+    }
     const cfg = await bootstrapConfig(p);
     return cfg;
   }

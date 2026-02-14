@@ -1,7 +1,7 @@
 ---
 name: diy-pc-ingest
 description: Ingest pasted PC parts purchase/config text (Discord message receipts, bullet lists) into Notion DIY_PC tables (PCConfig, ストレージ, エンクロージャー, PCInput). Use when the user pastes raw purchase logs/spec notes and wants the AI to classify, enrich via web search, ask follow-up questions for unknowns, and then upsert rows into the correct Notion data sources using the 2025-09-03 data_sources API.
-metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","DIY_PC_INGEST_CONFIG"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"localReads":["~/.config/diy-pc-ingest/config.json","~/.config/notion/api_key"],"localWrites":["~/.config/diy-pc-ingest/config.json"],"network":["notion-api","optional:web_search/web_fetch"]}}
+metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","DIY_PC_INGEST_CONFIG","DIY_PC_INGEST_BOOTSTRAP"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"localReads":["~/.config/diy-pc-ingest/config.json","~/.config/notion/api_key"],"localWrites":["~/.config/diy-pc-ingest/config.json (only when bootstrap enabled)"],"network":["notion-api","optional:web_search/web_fetch"]}}
 ---
 
 # diy-pc-ingest
@@ -12,6 +12,7 @@ This skill is intended to be shared. Do **not** hardcode your Notion IDs or toke
 
 1) Copy the example config:
 - `skills/diy-pc-ingest/references/config.example.json` → `~/.config/diy-pc-ingest/config.json`
+- Auto-bootstrap is disabled by default. Enable only when explicitly needed with `DIY_PC_INGEST_BOOTSTRAP=1`.
 
 2) Fill in your Notion targets (IDs):
 - `notion.targets.*.data_source_id` (for schema/query)
@@ -30,7 +31,7 @@ Notes:
 - Local input: pasted receipts/spec notes are parsed locally.
 - External enrichment (optional): `web_search`/`web_fetch` may send partial product text to external web providers.
 - Notion write path: records are queried/upserted via `notion-api-automation/scripts/notionctl.mjs`.
-- Local config: `~/.config/diy-pc-ingest/config.json` is read/written.
+- Local config: `~/.config/diy-pc-ingest/config.json` is read; write occurs only when bootstrap is explicitly enabled.
 
 Security rules:
 - If user does not want external enrichment, skip `web_search`/`web_fetch` and proceed with local extraction only.

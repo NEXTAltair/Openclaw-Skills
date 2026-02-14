@@ -85,8 +85,6 @@ async function main() {
     tags: multiProp(obj.tags || []),
     mood_label: selectProp(obj.mood_label || null),
     intent: selectProp(obj.intent || null),
-    highlights: multiProp(obj.highlights || []),
-    links: rtProp(obj.links || ''),
     source: selectProp(obj.source || 'manual'),
   };
 
