@@ -39,7 +39,7 @@
 
 - テンプレート: `state/spawn-profiles.template.json`
 - 実運用設定: `state/spawn-profiles.json`
-- 生成スクリプト: `scripts/build_spawn_payload.py`
+- 生成スクリプト: `scripts/build_spawn_payload.mjs`
 - 生成ログ: `state/build-log.jsonl`
 
 ## 使い方
@@ -58,7 +58,7 @@ cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
 ### 3) payloadを生成
 
 ```bash
-python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py \
+skills/subagent-spawn-command-builder/scripts/build_spawn_payload.mjs \
   --profile heartbeat \
   --task "Analyze recent context and return a compact summary" \
   --label heartbeat-test

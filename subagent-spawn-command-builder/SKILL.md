@@ -12,7 +12,7 @@ This skill does not execute `sessions_spawn`; it only builds payload/command JSO
 
 - Profile template: `state/spawn-profiles.template.json`
 - Active profile config: `state/spawn-profiles.json`
-- Builder script: `scripts/build_spawn_payload.py`
+- Builder script: `scripts/build_spawn_payload.mjs`
 - Builder log: `state/build-log.jsonl`
 
 ## Supported sessions_spawn parameters
@@ -37,7 +37,7 @@ Then edit `spawn-profiles.json`.
 ## Generate payload
 
 ```bash
-python3 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.py \
+skills/subagent-spawn-command-builder/scripts/build_spawn_payload.mjs \
   --profile heartbeat \
   --task "Analyze recent context and return a compact summary" \
   --label heartbeat-test
@@ -57,7 +57,7 @@ Value resolution order is:
 
 ## CLI options
 
-Note: if generated tasks include Python execution steps, write commands with `python3` (not `python`).
+Note: this builder is Node.js (`.mjs`) based. If generated tasks include Python execution steps, write commands with `python3` (not `python`).
 
 - `--profile` (required)
 - `--task` (required)
