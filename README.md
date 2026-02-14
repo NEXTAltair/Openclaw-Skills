@@ -10,9 +10,7 @@
 - soul-in-sapphire
 - media-name-normalize
 - rr-renamer
-- video-archive-db
-- video-metadata-extract
-- videolibrary-organizer
+- video-unwatched-pipeline
 
 ## Notes
 

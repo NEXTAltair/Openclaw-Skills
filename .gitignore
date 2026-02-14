@@ -25,6 +25,8 @@ media-name-normalize/
 
 #完成度が低いので一旦無視
 rr-renamer/
-video-archive-db/SKILL.md
-video-metadata-extract/SKILL.md
-videolibrary-organizer/SKILL.md
+
+# 設定(state)は基本無視し、テンプレだけ追跡
+state/
+!soul-in-sapphire/state/subagent-models.template.json
+!video-unwatched-pipeline/state/paths.template.json
