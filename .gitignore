@@ -20,7 +20,6 @@ moltbook/
 
 #user環境依存が強いので一旦無視
 lorairo-mem/
-media-name-normalize/
 
 
 #完成度が低いので一旦無視
@@ -29,4 +28,3 @@ rr-renamer/
 # 設定(state)は基本無視し、テンプレだけ追跡
 state/
 !soul-in-sapphire/state/subagent-models.template.json
-!video-unwatched-pipeline/state/paths.template.json

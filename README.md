@@ -8,9 +8,7 @@
 - calibre-metadata-apply
 - diy-pc-ingest
 - soul-in-sapphire
-- media-name-normalize
 - rr-renamer
-- video-unwatched-pipeline
 
 ## Notes
 
