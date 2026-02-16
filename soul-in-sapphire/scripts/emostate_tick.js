@@ -2,7 +2,12 @@
 /**
  * emostate_tick.js
  *
- * Input JSON on stdin:
+ * Input JSON:
+ * - --payload-file <path> (recommended for agents/automation)
+ * - --payload-json '<json>'
+ * - stdin (backward-compatible fallback)
+ *
+ * Payload shape:
  * {
  *   event: {...},
  *   emotions: [{axis, level, comment?, need?, coping?, body_signal? ...}, ...],
@@ -19,9 +24,89 @@ import {
   queryDataSource,
 } from './notionctl_bridge.js';
 
+function usage() {
+  process.stdout.write(
+    'Usage:\n' +
+    '  node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /path/to/payload.json\n' +
+    '  node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-json \'{"event":{...},"emotions":[],"state":{...}}\'\n' +
+    '  cat payload.json | node skills/soul-in-sapphire/scripts/emostate_tick.js\n'
+  );
+}
+
 function die(msg) {
   process.stderr.write(String(msg) + '\n');
   process.exit(1);
+}
+
+function expandHome(p) {
+  if (!p) return p;
+  if (p === '~') return os.homedir();
+  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
+  return p;
+}
+
+function parseArgs(argv) {
+  const out = { payloadFile: null, payloadJson: null, help: false };
+
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--help' || a === '-h') {
+      out.help = true;
+      continue;
+    }
+    if (a === '--payload-file') {
+      out.payloadFile = argv[++i] || '';
+      continue;
+    }
+    if (a.startsWith('--payload-file=')) {
+      out.payloadFile = a.slice('--payload-file='.length);
+      continue;
+    }
+    if (a === '--payload-json') {
+      out.payloadJson = argv[++i] || '';
+      continue;
+    }
+    if (a.startsWith('--payload-json=')) {
+      out.payloadJson = a.slice('--payload-json='.length);
+      continue;
+    }
+    die(`Unknown argument: ${a}`);
+  }
+
+  if (out.payloadFile && out.payloadJson) {
+    die('Use either --payload-file or --payload-json, not both.');
+  }
+  return out;
+}
+
+function readRawPayload(args) {
+  if (args.payloadFile) {
+    const fp = expandHome(args.payloadFile);
+    if (!fp || !fs.existsSync(fp)) die(`Payload file not found: ${fp || args.payloadFile}`);
+    const raw = fs.readFileSync(fp, 'utf-8').trim();
+    if (!raw) die(`Payload file is empty: ${fp}`);
+    return { raw, source: `--payload-file ${fp}` };
+  }
+
+  if (args.payloadJson != null) {
+    const raw = String(args.payloadJson).trim();
+    if (!raw) die('--payload-json is empty');
+    return { raw, source: '--payload-json' };
+  }
+
+  const raw = fs.readFileSync(0, 'utf-8').trim();
+  if (!raw) die('Expected JSON payload via --payload-file, --payload-json, or stdin');
+  return { raw, source: 'stdin' };
+}
+
+function parsePayload(args) {
+  const { raw, source } = readRawPayload(args);
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    die(`Invalid JSON in ${source}: ${msg}`);
+  }
 }
 
 function hasText(v) {
@@ -229,18 +314,22 @@ function assertMeaningfulPayload(payload) {
 }
 
 async function main() {
+  const args = parseArgs(process.argv.slice(2));
+  if (args.help) {
+    usage();
+    return;
+  }
+
+  const payload = parsePayload(args);
+  assertPayloadShape(payload);
+  assertMeaningfulPayload(payload);
+
   const cfg = readConfig();
   const eventsDb = cfg?.events?.database_id || cfg.valentina_events_database_id;
   const emotionsDb = cfg?.emotions?.database_id || cfg.valentina_emotions_database_id;
   const stateDb = cfg?.state?.database_id || cfg.valentina_state_database_id;
   const stateDs = cfg?.state?.data_source_id || cfg.valentina_state_data_source_id;
   if (!(eventsDb && emotionsDb && stateDb && stateDs)) die('Config missing events/emotions/state ids. Re-run setup.');
-
-  const raw = fs.readFileSync(0, 'utf-8').trim();
-  if (!raw) die('Expected JSON on stdin');
-  const payload = JSON.parse(raw);
-  assertPayloadShape(payload);
-  assertMeaningfulPayload(payload);
 
   const event = payload.event || {};
   const emotions = payload.emotions || [];

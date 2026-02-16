@@ -195,7 +195,7 @@ node skills/soul-in-sapphire/scripts/setup_ltm.js \
 1 event + N emotions を書き、最新stateから更新したstate snapshotを1件作ります。
 
 ```bash
-cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
+cat <<'JSON' > /tmp/emostate_tick.json
 {
   "event": {
     "title": "...",
@@ -220,6 +220,7 @@ cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
   }
 }
 JSON
+node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
 ```
 
 - stateは時間で5へ戻る(自然減衰)

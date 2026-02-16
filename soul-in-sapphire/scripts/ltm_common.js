@@ -24,12 +24,51 @@ function notionctlPath() {
   return p;
 }
 
+function parseNotionctlJson(raw) {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function apiCompatibilityHint(rawText) {
+  const text = String(rawText || '');
+  if (!text.includes('Unknown command: api')) return null;
+  return 'Installed notionctl does not support "api". Update skills/notion-api-automation/scripts/notionctl.mjs or set NOTIONCTL_PATH to a compatible notionctl.';
+}
+
+function extractExecFailure(err) {
+  const stdout = err?.stdout ? String(err.stdout).trim() : '';
+  const stderr = err?.stderr ? String(err.stderr).trim() : '';
+  const msg = err?.message ? String(err.message) : String(err);
+  return { stdout, stderr, msg };
+}
+
 function httpJson(method, apiPath, payload = undefined) {
   const args = [notionctlPath(), 'api', '--compact', '--method', String(method).toUpperCase(), '--path', String(apiPath)];
   if (payload !== undefined) args.push('--body-json', JSON.stringify(payload));
-  const out = execFileSync('node', args, { encoding: 'utf-8' }).trim();
-  const obj = out ? JSON.parse(out) : {};
-  if (!obj.ok) throw new Error(`notionctl api not ok: ${out}`);
+  let out = '';
+  try {
+    out = execFileSync('node', args, { encoding: 'utf-8' }).trim();
+  } catch (err) {
+    const info = extractExecFailure(err);
+    const combined = [info.stdout, info.stderr, info.msg].filter(Boolean).join('\n');
+    const compat = apiCompatibilityHint(combined);
+    if (compat) throw new Error(compat);
+    throw new Error(`notionctl api execution failed: ${combined || 'unknown error'}`);
+  }
+
+  const obj = parseNotionctlJson(out);
+  if (!obj || typeof obj !== 'object') {
+    throw new Error(`notionctl returned non-JSON output: ${out}`);
+  }
+  if (!obj.ok) {
+    const compat = apiCompatibilityHint(out);
+    if (compat) throw new Error(compat);
+    throw new Error(`notionctl api not ok: ${out}`);
+  }
   return obj.result || {};
 }
 

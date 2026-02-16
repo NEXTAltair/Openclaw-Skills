@@ -149,13 +149,14 @@ node skills/soul-in-sapphire/scripts/ltm_search.js --query "data_sources" --limi
 ### 4) Emotion/state tick
 
 ```bash
-cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
+cat <<'JSON' >/tmp/emostate_tick.json
 {
   "event": {"title":"..."},
   "emotions": [{"axis":"joy","level":6}],
   "state": {"mood_label":"clear","intent":"build","reason":"..."}
 }
 JSON
+node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
 ```
 
 ### 5) Journal write
@@ -187,8 +188,9 @@ Builder log file:
 - Keep writes high-signal (avoid dumping full chat logs).
 - If heartbeat is comment-only, emotion tick may be skipped.
 - If periodic emostate is required regardless of heartbeat context, add a dedicated cron job for `emostate_tick.js`.
-- `ltm_write.js` / `emostate_tick.js` / `journal_write.js` currently expect JSON on stdin. Do not call them with CLI flags only.
-- Empty stdin is intentionally rejected.
+- `ltm_write.js` / `journal_write.js` expect JSON on stdin.
+- `emostate_tick.js` accepts `--payload-file`, `--payload-json`, or stdin; prefer `--payload-file` for agent/cron reliability.
+- If `emostate_tick.js` is called without `--payload-file`/`--payload-json`, empty stdin is rejected.
 - For `emostate_tick.js`, semantically empty payloads (e.g. `{}` or only empty objects) are also rejected to avoid noisy records.
 
 ## Skill Integration Commands
@@ -258,7 +260,7 @@ fi
 
 ```bash
 # Integrate skill insights into core identity
-cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
+cat <<'JSON' >/tmp/skill_growth_tick.json
 {
   "event": { "title": "Skill Integration" },
   "emotions": [{ "axis": "focus", "level": 8 }],
@@ -269,6 +271,7 @@ cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
   }
 }
 JSON
+node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /tmp/skill_growth_tick.json
 
 # Update core files with new insights
 cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js

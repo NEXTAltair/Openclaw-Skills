@@ -101,11 +101,16 @@ async function main() {
     if (missingHighlights || missingLinks) {
       if (missingHighlights) delete props.highlights;
       if (missingLinks) delete props.links;
-      const page = await createPage(journalDb, props);
-      console.log(JSON.stringify({ ok: true, id: page.id, url: page.url, note: 'retried_without_optional_props' }, null, 2));
-      return;
+      try {
+        const page = await createPage(journalDb, props);
+        console.log(JSON.stringify({ ok: true, id: page.id, url: page.url, note: 'retried_without_optional_props' }, null, 2));
+        return;
+      } catch (retryErr) {
+        const retryMsg = String(retryErr?.message || retryErr);
+        throw new Error(`Notion write failed after retry: ${retryMsg}`);
+      }
     }
-    throw err;
+    throw new Error(`Notion write failed: ${msg}`);
   }
 }
 
