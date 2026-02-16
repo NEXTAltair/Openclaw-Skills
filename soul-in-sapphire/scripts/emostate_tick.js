@@ -24,6 +24,14 @@ function die(msg) {
   process.exit(1);
 }
 
+function hasText(v) {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
+function hasNumberLike(v) {
+  return !(v === null || v === undefined || v === '');
+}
+
 const AXES = [
   'arousal','valence','focus','confidence','stress','curiosity','social','solitude',
   'joy','anger','sadness','fun','pain',
@@ -158,6 +166,68 @@ function maybeAddImprints(stateJson, emotions, event) {
   stateJson.imprints = dedupRev.reverse();
 }
 
+function assertPayloadShape(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    die('Invalid payload: expected a JSON object.');
+  }
+  if (payload.event !== undefined && (typeof payload.event !== 'object' || payload.event === null || Array.isArray(payload.event))) {
+    die('Invalid payload: event must be an object.');
+  }
+  if (payload.emotions !== undefined && !Array.isArray(payload.emotions)) {
+    die('Invalid payload: emotions must be an array.');
+  }
+  if (payload.state !== undefined && (typeof payload.state !== 'object' || payload.state === null || Array.isArray(payload.state))) {
+    die('Invalid payload: state must be an object.');
+  }
+}
+
+function hasMeaningfulEvent(event) {
+  return (
+    hasText(event?.title) ||
+    hasText(event?.context) ||
+    hasText(event?.trigger) ||
+    hasText(event?.source) ||
+    hasText(event?.link) ||
+    hasNumberLike(event?.importance) ||
+    hasNumberLike(event?.uncertainty) ||
+    hasNumberLike(event?.control)
+  );
+}
+
+function hasMeaningfulEmotion(emotions) {
+  return emotions.some((emo) => (
+    emo && typeof emo === 'object' && (
+      hasText(emo.axis) ||
+      hasNumberLike(emo.level) ||
+      hasText(emo.comment) ||
+      hasText(emo.need) ||
+      hasText(emo.coping) ||
+      (Array.isArray(emo.body_signal) && emo.body_signal.some(Boolean))
+    )
+  ));
+}
+
+function hasMeaningfulState(state) {
+  return (
+    hasText(state?.title) ||
+    hasText(state?.reason) ||
+    hasText(state?.source) ||
+    hasText(state?.mood_label) ||
+    hasText(state?.intent) ||
+    hasText(state?.need_stack) ||
+    hasNumberLike(state?.need_level) ||
+    (Array.isArray(state?.avoid) && state.avoid.some(Boolean))
+  );
+}
+
+function assertMeaningfulPayload(payload) {
+  const event = payload.event || {};
+  const emotions = payload.emotions || [];
+  const state = payload.state || {};
+  if (hasMeaningfulEvent(event) || hasMeaningfulEmotion(emotions) || hasMeaningfulState(state)) return;
+  die('Meaningless payload: provide at least one non-empty event/emotions/state field.');
+}
+
 async function main() {
   const cfg = readConfig();
   const eventsDb = cfg?.events?.database_id || cfg.valentina_events_database_id;
@@ -169,6 +239,8 @@ async function main() {
   const raw = fs.readFileSync(0, 'utf-8').trim();
   if (!raw) die('Expected JSON on stdin');
   const payload = JSON.parse(raw);
+  assertPayloadShape(payload);
+  assertMeaningfulPayload(payload);
 
   const event = payload.event || {};
   const emotions = payload.emotions || [];

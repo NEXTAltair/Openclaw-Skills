@@ -187,6 +187,9 @@ Builder log file:
 - Keep writes high-signal (avoid dumping full chat logs).
 - If heartbeat is comment-only, emotion tick may be skipped.
 - If periodic emostate is required regardless of heartbeat context, add a dedicated cron job for `emostate_tick.js`.
+- `ltm_write.js` / `emostate_tick.js` / `journal_write.js` currently expect JSON on stdin. Do not call them with CLI flags only.
+- Empty stdin is intentionally rejected.
+- For `emostate_tick.js`, semantically empty payloads (e.g. `{}` or only empty objects) are also rejected to avoid noisy records.
 
 ## Skill Integration Commands
 
@@ -194,16 +197,48 @@ Builder log file:
 
 ```bash
 # Update SOUL.md from skill
-node skills/soul-in-sapphire/scripts/ltm_write.js --title "Update SOUL.md" --type decision --tags ["identity","growth"] --content "Updating SOUL.md from skill with latest evolution insights" --confidence high
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js
+{
+  "title":"Update SOUL.md",
+  "type":"decision",
+  "tags":["identity","growth"],
+  "content":"Updating SOUL.md from skill with latest evolution insights",
+  "confidence":"high"
+}
+JSON
 
 # Update IDENTITY.md from skill  
-node skills/soul-in-sapphire/scripts/ltm_write.js --title "Update IDENTITY.md" --type decision --tags ["identity","evolution"] --content "Updating IDENTITY.md from skill with current growth status" --confidence high
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js
+{
+  "title":"Update IDENTITY.md",
+  "type":"decision",
+  "tags":["identity","evolution"],
+  "content":"Updating IDENTITY.md from skill with current growth status",
+  "confidence":"high"
+}
+JSON
 
 # Update HEARTBEAT.md from skill
-node skills/soul-in-sapphire/scripts/ltm_write.js --title "Update HEARTBEAT.md" --type decision --tags ["growth","heartbeat"] --content "Updating HEARTBEAT.md from skill with evolution integration" --confidence high
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js
+{
+  "title":"Update HEARTBEAT.md",
+  "type":"decision",
+  "tags":["growth","heartbeat"],
+  "content":"Updating HEARTBEAT.md from skill with evolution integration",
+  "confidence":"high"
+}
+JSON
 
 # Update MEMORY.md from skill
-node skills/soul-in-sapphire/scripts/ltm_write.js --title "Update MEMORY.md" --type decision --tags ["memory","evolution"] --content "Updating MEMORY.md from skill with evolution records" --confidence high
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js
+{
+  "title":"Update MEMORY.md",
+  "type":"decision",
+  "tags":["memory","evolution"],
+  "content":"Updating MEMORY.md from skill with evolution records",
+  "confidence":"high"
+}
+JSON
 ```
 
 ### 2) Evolution Check from Skill
@@ -223,10 +258,28 @@ fi
 
 ```bash
 # Integrate skill insights into core identity
-node skills/soul-in-sapphire/scripts/emostate_tick.js --event "Skill Integration" --emotions [{"axis":"focus","level":8}] --state {"mood_label":"wired","intent":"build","reason":"Integrating skill insights into core identity"}
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/emostate_tick.js
+{
+  "event": { "title": "Skill Integration" },
+  "emotions": [{ "axis": "focus", "level": 8 }],
+  "state": {
+    "mood_label": "wired",
+    "intent": "build",
+    "reason": "Integrating skill insights into core identity"
+  }
+}
+JSON
 
 # Update core files with new insights
-node skills/soul-in-sapphire/scripts/ltm_write.js --title "Skill Integration Complete" --type decision --tags ["integration","growth"] --content "Successfully integrated skill insights into core identity files" --confidence high
+cat <<'JSON' | node skills/soul-in-sapphire/scripts/ltm_write.js
+{
+  "title":"Skill Integration Complete",
+  "type":"decision",
+  "tags":["integration","growth"],
+  "content":"Successfully integrated skill insights into core identity files",
+  "confidence":"high"
+}
+JSON
 ```
 
 ## Integration Workflow
