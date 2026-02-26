@@ -19,9 +19,19 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
 4. Calibre Content serverへ到達できることを確認する。
 5. 接続先は必ず明示的な `HOST:PORT` を使う。
    - `http://HOST:PORT/#LIBRARY_ID`
+   - `--with-library` を省略する場合は以下を事前設定する。
+     - env: `CALIBRE_WITH_LIBRARY` / `CALIBRE_LIBRARY_URL` / `CALIBRE_CONTENT_SERVER_URL`
+     - config: `~/.config/calibre-catalog-read/config.json` の `with_library`
+     - `#LIBRARY_ID` が無いURLは `CALIBRE_LIBRARY_ID` または config `library_id` で補完可能
+   - IP変更対策:
+     - `CALIBRE_SERVER_HOSTS=host1,host2,...` を設定すると候補を順に試行
+     - WSLでは `/etc/resolv.conf` の `nameserver` も自動候補に追加
+   - `LIBRARY_ID` が不明なら `#-` で一覧確認可能。
+     - 例: `calibredb list --with-library "http://HOST:PORT/#-" --username ... --password ...`
 6. 認証が有効な場合は `~/.openclaw/.env` に設定する(推奨)。
    - `CALIBRE_USERNAME=<user>`
    - `CALIBRE_PASSWORD=<password>`
+   - 認証方式は非SSL運用前提でDigest固定(自動)とし、`--auth-mode` / `--auth-scheme` は使わない
    - 実行時は `--password-env CALIBRE_PASSWORD` を渡す(ユーザー名はenvから自動読込)。
    - 任意で `~/.config/calibre-catalog-read/auth.json` に認証キャッシュ可能。
    - `--save-plain-password` は平文保存のため、明示指示がない限り使わない。
@@ -29,6 +39,8 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
 ## 重要
 
 OpenClaw単体では不足です。実行環境にCalibreを入れて、必要バイナリを利用可能にしてください。
+チャット実行時は、参照処理を `node scripts/calibredb_read.mjs ...` 経由に寄せ、`calibredb` 直接実行は避けてください。
+この運用では既存のCalibre Content serverに接続するため、`calibre-server` の起動は不要です。
 
 WindowsではDefender Controlled Folder Accessの影響でメタデータ/ファイル操作が失敗する場合があります。
 `WinError 2/5` が出る場合は、Calibreライブラリフォルダや関連バイナリを許可対象に追加してください。

@@ -1,6 +1,6 @@
 ---
 name: calibre-catalog-read
-description: Read Calibre catalog data via calibredb over a Content server, and run one-book analysis workflow that writes HTML analysis block back to comments while caching analysis state in SQLite. Use for list/search/id lookups and AI reading pipeline for a selected book.
+description: Read-only Calibre catalog lookup and one-book analysis-comments workflow over a running Content server. Use only for list/search/id and analysis comments block updates, never for title/authors/tags/series/series_index metadata edits.
 metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**","~/.config/calibre-catalog-read/auth.json"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
@@ -10,6 +10,17 @@ Use this skill for:
 - Read-only catalog lookup (`list/search/id`)
 - One-book AI reading workflow (`export -> analyze -> cache -> comments HTML apply`)
 
+## Skill selection contract (strict)
+
+- This skill is read-only for catalog lookup + analysis workflow.
+- If user intent includes metadata edit/fix/update (title/authors/series/series_index/tags/publisher/pubdate/languages),
+  route to `calibre-metadata-apply` and do not execute edit paths here.
+
+Do NOT use this skill for:
+- Editing title/authors/series/series_index/tags/publisher/pubdate/languages
+- Any user request that says "metadata edit", "title fix", "ID指定で編集"
+- Those must use `calibre-metadata-apply`
+
 ## Requirements
 
 - `calibredb` available on PATH in the runtime where scripts are executed.
@@ -17,11 +28,22 @@ Use this skill for:
 - `subagent-spawn-command-builder` installed (for spawn payload generation).
 - Reachable Calibre Content server URL in `--with-library` format:
   - `http://HOST:PORT/#LIBRARY_ID`
+  - If `LIBRARY_ID` is unknown, use `#-` once to list available IDs on the server.
 - Do not assume localhost/127.0.0.1; always pass explicit reachable `HOST:PORT`.
+- `--with-library` can be omitted only when one of these is configured:
+  - env: `CALIBRE_WITH_LIBRARY` or `CALIBRE_LIBRARY_URL` or `CALIBRE_CONTENT_SERVER_URL`
+  - config: `~/.config/calibre-catalog-read/config.json` with `with_library`
+  - optional library id completion: `CALIBRE_LIBRARY_ID` or config `library_id`
+- Host failover (IP change resilience):
+  - Optional env: `CALIBRE_SERVER_HOSTS=host1,host2,...`
+  - Script auto-tries candidates, including WSL host-side `nameserver` from `/etc/resolv.conf`.
 - If auth is enabled:
   - Preferred: set in `/home/altair/.openclaw/.env`
     - `CALIBRE_USERNAME=<user>`
     - `CALIBRE_PASSWORD=<password>`
+  - Auth scheme policy for this workflow:
+    - Non-SSL deployment assumes **Digest** authentication.
+    - Do not pass auth mode arguments such as `--auth-mode` / `--auth-scheme`.
   - Then pass only `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
   - You can still override with `--username <user>` explicitly.
   - Optional auth cache file: `~/.config/calibre-catalog-read/auth.json`
@@ -138,6 +160,16 @@ Rules:
 - Exclude manga/comic-centric books from this text pipeline (skip when title/tags indicate manga/comic).
 - If extracted text is too short, stop and ask user for confirmation before continuing.
   - The pipeline returns `reason: low_text_requires_confirmation` with `prompt_en` text.
+- For read operations in agent/chat, prefer `node .../calibredb_read.mjs` instead of direct `calibredb` calls.
+- Never run `calibre-server` from this skill.
+  - This workflow always connects to an already-running Calibre Content server.
+
+## Connection bootstrap (mandatory)
+
+- Do not ask the user for `--with-library` first.
+- First, run read commands (`list/search/id`) without explicit `--with-library` and use saved defaults.
+  - Scripts auto-load `.env` and resolve `CALIBRE_WITH_LIBRARY` / `CALIBRE_CONTENT_SERVER_URL`.
+- Ask user for URL only if resolution fails (`missing --with-library` / `unable to resolve usable --with-library`).
 
 ## Language policy
 
