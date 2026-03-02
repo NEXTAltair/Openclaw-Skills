@@ -57,9 +57,19 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
 6. `--with-library` は次の形式で指定する
    - `http://HOST:PORT/#LIBRARY_ID`
    - localhost前提にしない（明示的なHOST:PORTを使う）
+   - 省略する場合は以下のどれかを事前設定する
+     - env: `CALIBRE_WITH_LIBRARY` / `CALIBRE_LIBRARY_URL` / `CALIBRE_CONTENT_SERVER_URL`
+     - config: `~/.config/calibre-metadata-apply/config.json` の `with_library`
+     - URLに`#LIBRARY_ID`が無い場合は `CALIBRE_LIBRARY_ID` か config `library_id` で補完可能
+   - IP変更対策:
+     - `CALIBRE_SERVER_HOSTS=host1,host2,...` を設定すると候補を順に試行
+     - WSLでは `/etc/resolv.conf` の `nameserver` も自動候補に追加
+   - `LIBRARY_ID` が不明な場合は `#-` で一覧確認できる
+     - 例: `calibredb list --with-library "http://HOST:PORT/#-" --username ... --password ...`
 7. 認証が有効な場合は次を指定する
    - `--username <user>`
    - `--password-env <ENV_VAR>` または `--password <plain>`
+   - 認証方式は非SSL運用前提でDigest固定(自動)とし、`--auth-mode` / `--auth-scheme` は使わない
 8. 認証情報を保存して再利用したい場合は `--save-auth` を使う
    - 既定保存先: `~/.config/calibre-metadata-apply/auth.json`
    - 既定では `username` と `password_env` を保存
@@ -75,6 +85,8 @@ sudo apt install -y calibre poppler-utils
 ## 重要
 
 OpenClawが入っているだけでは不十分です。実行環境側に `calibredb` が必要です。
+チャット実行時は `calibredb` 直接実行ではなく、必ず `node scripts/calibredb_apply.mjs` を使ってください。
+この運用では既存のCalibre Content serverに接続するため、`calibre-server` を起動する手順は不要です。
 
 WindowsではDefender Controlled Folder Access等の影響で書き込みが失敗する場合があります。
 `WinError 2/5` などのパス/アクセス系エラーが出る場合は、Calibreライブラリフォルダや実行バイナリを許可リストに追加してください。
@@ -134,3 +146,5 @@ cat references/changes.example.jsonl | node scripts/calibredb_apply.mjs \
 cat references/changes.example.jsonl | node scripts/calibredb_apply.mjs \
   --with-library "http://127.0.0.1:8080/#MyLibrary"
 ```
+
+`--with-library` を省略したい場合は、先に `CALIBRE_WITH_LIBRARY` などを設定してください。

@@ -1,12 +1,25 @@
 ---
 name: calibre-metadata-apply
-description: Apply metadata updates to existing Calibre books via calibredb over a Content server. Use for controlled metadata edits after target IDs are confirmed by a read-only lookup.
+description: Primary skill for Calibre metadata edits over a running Content server. Use this for ID-based title/authors/series/series_index/tags/publisher/pubdate/languages updates and controlled apply after confirmation.
 metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json","~/.config/calibre-metadata-apply/auth.json","~/.config/calibre-metadata-apply/config.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
 # calibre-metadata-apply
 
 A skill for updating metadata of existing Calibre books.
+
+## Skill selection contract (strict)
+
+- If the user intent is metadata edit/fix/update, this skill is mandatory.
+- If the request mentions ID-based title fix (e.g. `ID1011 タイトル修正`), this skill is mandatory.
+- `calibre-catalog-read` must not be used for those edit intents.
+
+Use this skill when the user asks any of:
+- "ID指定でタイトル修正"
+- "メタデータ編集"
+- `title/authors/series/series_index/tags/publisher/pubdate/languages` updates
+
+Do NOT route those requests to `calibre-catalog-read`.
 
 ## Requirements
 
@@ -15,9 +28,20 @@ A skill for updating metadata of existing Calibre books.
 - `pdffonts` is optional/recommended for PDF evidence checks
 - Reachable Calibre Content server URL
   - `http://HOST:PORT/#LIBRARY_ID`
+  - If `LIBRARY_ID` is unknown, use `#-` once to list available IDs on the server.
+- `--with-library` can be omitted only when one of these is configured:
+  - env: `CALIBRE_WITH_LIBRARY` or `CALIBRE_LIBRARY_URL` or `CALIBRE_CONTENT_SERVER_URL`
+  - config: `~/.config/calibre-metadata-apply/config.json` with `with_library`
+  - optional library id completion: `CALIBRE_LIBRARY_ID` or config `library_id`
+- Host failover (IP change resilience):
+  - Optional env: `CALIBRE_SERVER_HOSTS=host1,host2,...`
+  - Script auto-tries candidates, including WSL host-side `nameserver` from `/etc/resolv.conf`.
 - If authentication is enabled, prefer `/home/altair/.openclaw/.env`:
   - `CALIBRE_USERNAME=<user>`
   - `CALIBRE_PASSWORD=<password>`
+- Auth scheme policy for this workflow:
+  - Non-SSL deployment assumes **Digest** authentication.
+  - Do not pass auth mode arguments such as `--auth-mode` / `--auth-scheme`.
 - Pass `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
 - You can still override explicitly with `--username <user>`.
 - Optional auth cache: `--save-auth` (default file: `~/.config/calibre-metadata-apply/auth.json`)
@@ -93,6 +117,20 @@ Security rules:
 - Do not use `--save-plain-password` unless explicitly instructed by the user.
 - Prefer env-based password (`--password-env CALIBRE_PASSWORD`) over inline `--password`.
 - If user does not want external model/subagent processing, keep flow local and skip subagent orchestration.
+- In agent/chat execution, do not call `calibredb` directly for edit operations.
+  - Always execute `node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs`.
+- Never run `calibre-server` from this skill.
+  - This workflow always targets an already-running Calibre Content server.
+
+## Connection bootstrap (mandatory)
+
+- Do not ask the user for `--with-library` first.
+- First, execute using saved defaults (env/config) with no explicit `--with-library`.
+  - Scripts auto-load `.env` and resolve `CALIBRE_WITH_LIBRARY` / `CALIBRE_CONTENT_SERVER_URL`.
+- Ask user for URL only when command output shows unresolved connection, such as:
+  - `missing --with-library`
+  - `unable to resolve usable --with-library`
+  - repeated connection failures for all candidates
 
 ## Long-run turn-split policy (library-wide)
 
@@ -196,6 +234,14 @@ cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.m
   --lang ja
 ```
 
+Dry-run (when default library is preconfigured via env/config):
+
+```bash
+cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs \
+  --password-env CALIBRE_PASSWORD \
+  --lang ja
+```
+
 Apply:
 
 ```bash
@@ -210,3 +256,4 @@ cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.m
 - Do not run direct `--apply` using ambiguous title matches only
 - Do not include unconfirmed IDs in apply payload
 - Do not auto-fill low-confidence candidates without explicit confirmation
+- Do not start a local server with guessed path like `~/Calibre Library`
