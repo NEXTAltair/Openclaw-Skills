@@ -46,8 +46,17 @@ function extractExecFailure(err) {
   return { stdout, stderr, msg };
 }
 
+function normalizeApiPath(apiPath) {
+  const p = String(apiPath || '').trim();
+  if (!p) throw new Error('Missing apiPath');
+  if (p.startsWith('/v1/')) return p;
+  if (p === '/v1') return p;
+  if (p.startsWith('/')) return `/v1${p}`;
+  return `/v1/${p}`;
+}
+
 function httpJson(method, apiPath, payload = undefined) {
-  const args = [notionctlPath(), 'api', '--compact', '--method', String(method).toUpperCase(), '--path', String(apiPath)];
+  const args = [notionctlPath(), 'api', '--compact', '--method', String(method).toUpperCase(), '--path', normalizeApiPath(apiPath)];
   if (payload !== undefined) args.push('--body-json', JSON.stringify(payload));
   let out = '';
   try {

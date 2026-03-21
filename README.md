@@ -9,6 +9,7 @@
 - diy-pc-ingest
 - soul-in-sapphire
 - rr-renamer
+- subagent-spawn-command-builder
 
 ## Notes
 
