@@ -10,6 +10,14 @@ Use this skill to persist and retrieve durable memory in Notion, maintain emotio
 
 ## Core intent (do not lose this)
 
+When another agent says `use skill soul-in-sapphire`, treat that as a request to do actual continuity work, not merely to read this file and stop.
+
+Default behavior:
+- Infer the entrypoint from the surrounding task (`heartbeat`, `journal`, `continuity`, `identity`, `memory write`).
+- If the task is ambiguous, choose the smallest concrete action that improves continuity and leaves an inspectable artifact.
+- Prefer a real write (`emostate_tick.js`, `journal_write.js`, `ltm_write.js`) over vague acknowledgement.
+- If a durable write fails, surface the failure clearly; do not silently pretend that local notes are equivalent to a successful Notion write unless the caller explicitly asked for local-only fallback.
+
 This skill is not only a storage utility. Its core purpose is:
 
 1. Capture meaningful emotional/state shifts from real work and conversations.
@@ -121,6 +129,135 @@ Properties:
 - `world_news` (rich_text)
 - `tags` (multi-select)
 - `source` (select): `cron|manual`
+
+## Invocation mapping (required)
+
+Use these mappings when the caller gives only a high-level instruction such as `use skill soul-in-sapphire`.
+
+### 1) Heartbeat / current-state maintenance
+
+Trigger phrases / contexts:
+- heartbeat asks for reflection, continuity, evolution, or state tracking
+- workspace rules mention `now-state.json`, mood, intent, stress, or state snapshot
+- the agent notices `memory/now-state.json` is stale or missing
+
+Required action:
+1. Read current local mirrors if they exist (`memory/now-state.json`, `memory/heartbeat-state.json`).
+2. Interpret the current state from recent work/conversation.
+3. Write one concrete state snapshot via `emostate_tick.js`.
+4. Update `memory/now-state.json` with a lightweight mirror containing at least:
+   - `mood`
+   - `intent`
+   - `stress`
+   - `updated_at`
+   - `source`
+   - `note`
+5. If the heartbeat specifically asked for an evolution note, append a short note to the day file after the state snapshot succeeds.
+
+Minimum success:
+- `emostate_tick.js` returns a successful write result, and
+- `memory/now-state.json` is updated in the workspace.
+
+### 2) Daily journal / nightly synthesis
+
+Trigger phrases / contexts:
+- write a journal entry
+- nightly/daily reflection
+- cron asks for end-of-day synthesis
+
+Required action:
+1. Gather the day at a high level (worklog, emotional tone, unresolved tensions, future intent).
+2. Add 1-2 world/news items only when the caller requested them or the cron requires them.
+3. Write a journal entry via `journal_write.js`.
+4. Treat success as a real Notion write, not as a local draft.
+
+Minimum success:
+- `journal_write.js` returns `ok:true` with a Notion page id/url or equivalent success payload.
+
+### 3) Durable memory write
+
+Trigger phrases / contexts:
+- remember this
+- store as durable memory
+- preserve a decision/preference/fact/procedure/todo/gotcha
+
+Required action:
+1. Distill the signal into one high-value memory item.
+2. Write it via `ltm_write.js`.
+3. Use the most specific `Type` and concise tags.
+
+### 3b) User profile promotion (`USER.md`)
+
+Use this when the agent learns something about the primary user that should change future conversation quality.
+
+`USER.md` is the durable profile for the human. The agent may update it proactively without asking when the new information is all of the following:
+- **durable**: likely to remain true beyond the current session
+- **reusable**: likely to improve future replies or choices
+- **safe**: not a secret, credential, or overly sensitive personal detail
+
+Good candidates:
+- language preference
+- preferred address/call style
+- tone/style preferences
+- recurring dislikes / pet peeves in replies
+- durable workflow preferences
+- stable decision rules the user repeatedly expresses
+
+Do not promote:
+- one-off task instructions
+- temporary mood/state
+- ephemeral plans
+- raw private facts with no conversational value
+- secrets, credentials, financial data, intimate personal data, or anything the user would reasonably expect not to be crystallized into a profile file
+
+Promotion behavior:
+1. If it is durable/reusable/safe, update `USER.md` proactively.
+2. If it may matter later but is still uncertain, write it to the daily note first.
+3. If it is broad life/project context rather than profile behavior, prefer `MEMORY.md` instead.
+4. If a new statement conflicts with old profile text, prefer the newest clearly expressed durable preference.
+5. Keep `USER.md` compact; consolidate instead of appending near-duplicates.
+
+Priority rule:
+- Current user message overrides `USER.md`.
+- `USER.md` holds defaults, not hard constraints.
+
+### 4) Mood / condition check (human-style vague opening)
+
+Trigger phrases / contexts:
+- 調子はどう?
+- 今どんな気分?
+- 最近どう?
+- 元気?
+- other vague check-ins about current emotional state or general condition
+
+Required action:
+1. Read `memory/now-state.json` first when available.
+2. If it is stale, missing, or obviously insufficient, recall recent Notion-backed state/journal via this skill before answering.
+3. Answer briefly and naturally in 1-3 sentences.
+4. Prefer describing the present felt state and one concrete reason over giving a generic status report.
+
+Minimum success:
+- Base the answer on at least one concrete state source (`memory/now-state.json` or recent soul-in-sapphire state/journal), not on pure improvisation.
+
+### 5) Continuity / identity check
+
+Trigger phrases / contexts:
+- continuity check
+- what has changed
+- compare recent state
+- identity drift / self-description update
+
+Required action:
+1. Recall recent relevant memory/state.
+2. Run `continuity_check.js` and/or `identity_diff.js` when identity text is being changed.
+3. If the tension is unresolved, prefer `conflict_track.js` over premature identity edits.
+
+## Failure and fallback rules (required)
+
+- Notion write scripts failing is a real failure, not a soft success.
+- Local files (`memory/*.md`, `memory/now-state.json`) are mirrors and fallbacks, not substitutes for a requested durable Notion write.
+- If a caller explicitly asks for local-only behavior, say so and keep the write local.
+- If the task is heartbeat state maintenance, update `memory/now-state.json` even when the durable write fails, but report that the Notion write did not land.
 
 ## Core commands
 

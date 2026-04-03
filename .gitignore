@@ -17,6 +17,11 @@ context7/
 sonoscli/
 notion-api-automation/
 moltbook/
+self-improving-agent/
+homeassistant-skill/
+skill-vetter/
+vassili-clawhub-cli/
+
 
 #user環境依存が強いので一旦無視
 lorairo-mem/

@@ -9,16 +9,24 @@ metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-conver
 Use this skill for:
 - Read-only catalog lookup (`list/search/id`)
 - One-book AI reading workflow (`export -> analyze -> cache -> comments HTML apply`)
+- Natural conversational book-reference turns where a lightweight read-only lookup would improve the reply
+  - Examples: the user mentions a book that may exist in the library, suggests "if you're interested, read it", asks whether it is in the library, or continues a reading-related conversation without using explicit command wording
 
 ## Skill selection contract (strict)
 
 - This skill is read-only for catalog lookup + analysis workflow.
+- This skill may also be selected from natural conversation when the likely user need is a lightweight library check or book lookup, even if the user does not use explicit command-style wording.
+- In such conversational cases, prefer the smallest useful action first:
+  - first choice: `id/search/list` style read-only lookup
+  - do not jump directly into heavy analysis unless the user clearly asks for it
+  - do not treat casual book talk as metadata-edit intent
 - If user intent includes metadata edit/fix/update (title/authors/series/series_index/tags/publisher/pubdate/languages),
   route to `calibre-metadata-apply` and do not execute edit paths here.
 
 Do NOT use this skill for:
 - Editing title/authors/series/series_index/tags/publisher/pubdate/languages
 - Any user request that says "metadata edit", "title fix", "ID指定で編集"
+- Heavy one-book analysis when the user only made a casual conversational reference and did not ask for reading/analysis
 - Those must use `calibre-metadata-apply`
 
 ## Requirements
@@ -169,6 +177,7 @@ Rules:
 - Do not ask the user for `--with-library` first.
 - First, run read commands (`list/search/id`) without explicit `--with-library` and use saved defaults.
   - Scripts auto-load `.env` and resolve `CALIBRE_WITH_LIBRARY` / `CALIBRE_CONTENT_SERVER_URL`.
+- This same rule applies to conversational lookup turns: try the lightweight read-only check first before asking the user for connection details.
 - Ask user for URL only if resolution fails (`missing --with-library` / `unable to resolve usable --with-library`).
 
 ## Language policy
