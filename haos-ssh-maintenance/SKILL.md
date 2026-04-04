@@ -126,11 +126,28 @@ Use SSH for:
 - interactive `ha` CLI log inspection
 - Supervisor or container-side log inspection
 - shell-level checks
+- targeted `.storage` inspection or edits when UI/registry-backed state must be changed directly
 
 Do not use SSH first for:
 - normal state checks
 - routine entity discovery
 - simple automation enable/disable/trigger actions
+
+## `.storage` direct-edit policy
+
+Home Assistant internal storage under `/config/.storage/` can be edited when necessary, including files such as:
+- `/config/.storage/core.entity_registry`
+- `/config/.storage/core.device_registry`
+- `/config/.storage/core.config_entries`
+
+Rules:
+- Treat `.storage` edits as a last-resort or targeted-operation path, not the default first move.
+- Back up the exact file before every edit.
+- Prefer the smallest possible change to a specific entity/device/config entry.
+- Expect UI names to live in `core.entity_registry`; YAML `friendly_name` overlays can override what the UI shows.
+- Be aware of writeback/refresh timing: changes may not appear immediately and may require reload or restart.
+- Avoid broad rewrites of `.storage` JSON unless explicitly necessary.
+- Report both the file path edited and the rollback path created.
 
 ## Safety
 
