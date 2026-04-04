@@ -12,14 +12,13 @@
 
 そのため、**「実行」と「生成」を分離**し、このスキルは
 
-- プロファイル(JSON)管理
 - `sessions_spawn` payload生成
 
 だけに責務を限定しています。
 
 ## 目的
 
-- subagent実行パラメータをJSONプロファイルで管理する
+- subagent実行パラメータをCLI引数で明示的に渡す
 - `sessions_spawn` に渡すJSONを安定して生成する
 - 実行は呼び出し側に任せる(このスキルは生成専用)
 
@@ -34,48 +33,46 @@
 - `thinking` (optional)
 - `runTimeoutSeconds` (optional)
 - `cleanup` (`keep|delete`, optional)
+- `cwd` (optional) — subagentの作業ディレクトリ
+- `mode` (`run|session`, optional)
 
 ## ファイル構成
 
-- テンプレート: `state/spawn-profiles.template.json`
-- 実運用設定: `state/spawn-profiles.json`
 - 生成スクリプト: `scripts/build_spawn_payload.mjs`
 - 生成ログ: `state/build-log.jsonl`
 
 ## 使い方
 
-### 1) テンプレートをコピー
-
-```bash
-cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
-   skills/subagent-spawn-command-builder/state/spawn-profiles.json
-```
-
-### 2) `spawn-profiles.json` を編集
-
-`model` などを自分の環境に合わせて設定。
-
-### 3) payloadを生成
+TOOLS.md の "Subagent Spawn Profiles" テーブルから対象プロファイルの値を読み取り、CLI引数で渡します。
 
 ```bash
 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.mjs \
   --profile heartbeat \
   --task "Analyze recent context and return a compact summary" \
-  --label heartbeat-test
+  --label heartbeat-test \
+  --model openai/gpt-5.4-nano \
+  --thinking medium \
+  --run-timeout-seconds 180 \
+  --cleanup keep
 ```
 
-## 値の優先順位
+`--cwd` / `--mode` が必要な場合は追加します。
 
-同じ項目が複数場所にある場合、次の順で採用されます。
+```bash
+  --cwd /home/altair/.openclaw/workspace/val \
+  --mode run
+```
 
-1. CLI引数(`--model` など)
-2. `profiles.<name>.*`
-3. `defaults.*`
+## 値の決め方
 
-`task` は必ずCLIの `--task` を使います。
+全ての値はCLI引数から取得します。プロファイル設定ファイルは存在しません。
+
+- モデル・思考レベル・タイムアウトなどのデフォルト値は TOOLS.md の "Subagent Spawn Profiles" テーブルを参照
+- `--profile` はログラベルのみ(設定ファイルのlookupキーではない)
+- `task` は必ず `--task` で渡す
 
 ## 注意
 
 - このスキルは payload/command 生成専用です
 - `sessions_spawn` の実行はこのスキルの責務外です
-- Python実行コマンドをtaskに含める場合は `python3` を使ってください(`python` は環境によって未定義)。
+- Python実行コマンドをtaskに含める場合は `python3` を使ってください(`python` は環境によって未定義)

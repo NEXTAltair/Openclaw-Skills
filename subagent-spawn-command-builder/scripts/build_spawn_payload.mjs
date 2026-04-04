@@ -23,6 +23,8 @@ function usage() {
 `  --thinking <value>            sessions_spawn.thinking\n` +
 `  --run-timeout-seconds <int>   sessions_spawn.runTimeoutSeconds\n` +
 `  --cleanup <keep|delete>       sessions_spawn.cleanup\n` +
+`  --cwd <path>                  sessions_spawn.cwd (working directory for subagent)\n` +
+`  --mode <run|session>          sessions_spawn.mode\n` +
 `  -h, --help                    show this help\n`);
 }
 
@@ -36,6 +38,8 @@ function parseArgs(argv) {
     thinking: "",
     runTimeoutSeconds: undefined,
     cleanup: "",
+    cwd: "",
+    mode: "",
   };
 
   const map = new Map([
@@ -47,6 +51,8 @@ function parseArgs(argv) {
     ["--thinking", "thinking"],
     ["--run-timeout-seconds", "runTimeoutSeconds"],
     ["--cleanup", "cleanup"],
+    ["--cwd", "cwd"],
+    ["--mode", "mode"],
   ]);
 
   for (let i = 0; i < argv.length; i++) {
@@ -81,6 +87,9 @@ function parseArgs(argv) {
   if (out.cleanup && !["keep", "delete"].includes(out.cleanup)) {
     throw new Error(`--cleanup must be keep|delete, got: ${out.cleanup}`);
   }
+  if (out.mode && !["run", "session"].includes(out.mode)) {
+    throw new Error(`--mode must be run|session, got: ${out.mode}`);
+  }
 
   return out;
 }
@@ -103,6 +112,8 @@ function main() {
   if (nonEmpty(args.thinking)) payload.thinking = args.thinking;
   if (args.runTimeoutSeconds !== undefined) payload.runTimeoutSeconds = args.runTimeoutSeconds;
   if (nonEmpty(args.cleanup)) payload.cleanup = args.cleanup;
+  if (nonEmpty(args.cwd)) payload.cwd = args.cwd;
+  if (nonEmpty(args.mode)) payload.mode = args.mode;
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
   const logLine = JSON.stringify({ ts: Math.floor(Date.now() / 1000), profile: args.profile, payload }, null, 0) + "\n";

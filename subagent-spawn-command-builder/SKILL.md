@@ -22,6 +22,8 @@ This skill does not execute `sessions_spawn`; it only builds payload/command JSO
 - `thinking` (optional)
 - `runTimeoutSeconds` (optional)
 - `cleanup` (`keep|delete`, optional)
+- `cwd` (optional) — working directory for the subagent
+- `mode` (`run|session`, optional)
 
 ## Setup
 
@@ -60,3 +62,5 @@ Note: this builder is Node.js (`.mjs`) based. If generated tasks include Python 
 - `--thinking`
 - `--run-timeout-seconds`
 - `--cleanup keep|delete`
+- `--cwd <path>`
+- `--mode run|session`
