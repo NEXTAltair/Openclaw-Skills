@@ -8,15 +8,14 @@ const __dirname = path.dirname(__filename);
 
 const ROOT = path.resolve(__dirname, "..");
 const STATE_DIR = path.join(ROOT, "state");
-const CFG_PATH = path.join(STATE_DIR, "spawn-profiles.json");
 const LOG_PATH = path.join(STATE_DIR, "build-log.jsonl");
 
 function usage() {
-  console.error(`Build sessions_spawn payload from local JSON profiles\n\n` +
+  console.error(`Build sessions_spawn payload from CLI arguments (values from TOOLS.md)\n\n` +
 `Usage:\n` +
 `  node scripts/build_spawn_payload.mjs --profile <name> --task <text> [options]\n\n` +
 `Options:\n` +
-`  --profile <name>              profile key in state/spawn-profiles.json (required)\n` +
+`  --profile <name>              profile label for logging (required)\n` +
 `  --task <text>                 task text for subagent (required)\n` +
 `  --label <text>                sessions_spawn.label\n` +
 `  --agent-id <id>               sessions_spawn.agentId\n` +
@@ -86,49 +85,24 @@ function parseArgs(argv) {
   return out;
 }
 
-function loadCfg() {
-  if (!fs.existsSync(CFG_PATH)) {
-    const templatePath = path.join(STATE_DIR, "spawn-profiles.template.json");
-    throw new Error(`Missing config: ${CFG_PATH}\nCreate it from template: ${templatePath}`);
-  }
-  return JSON.parse(fs.readFileSync(CFG_PATH, "utf8"));
-}
-
-function pick(cliVal, profile, defaults, key) {
-  if (cliVal !== undefined && cliVal !== null && cliVal !== "") return cliVal;
-  if (Object.hasOwn(profile, key) && profile[key] !== undefined && profile[key] !== null && profile[key] !== "") return profile[key];
-  return defaults[key];
+function nonEmpty(v) {
+  return v !== undefined && v !== null && v !== "";
 }
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const cfg = loadCfg();
-
-  const profile = (cfg.profiles || {})[args.profile];
-  if (!profile) throw new Error(`Unknown profile: ${args.profile}`);
-  const defaults = cfg.defaults || {};
 
   const payload = { task: args.task };
 
-  const label = pick(args.label, profile, defaults, "label");
-  payload.label = (label !== undefined && label !== null && label !== "")
-    ? label
+  payload.label = nonEmpty(args.label)
+    ? args.label
     : `${args.profile}-${Math.floor(Date.now() / 1000)}`;
 
-  const agentId = pick(args.agentId, profile, defaults, "agentId");
-  if (agentId !== undefined && agentId !== null && agentId !== "") payload.agentId = agentId;
-
-  const model = pick(args.model, profile, defaults, "model");
-  if (model !== undefined && model !== null && model !== "" && model !== "<set-by-user>") payload.model = model;
-
-  const thinking = pick(args.thinking, profile, defaults, "thinking");
-  if (thinking !== undefined && thinking !== null && thinking !== "") payload.thinking = thinking;
-
-  const rts = pick(args.runTimeoutSeconds, profile, defaults, "runTimeoutSeconds");
-  if (rts !== undefined && rts !== null && rts !== "") payload.runTimeoutSeconds = Number.parseInt(String(rts), 10);
-
-  const cleanup = pick(args.cleanup, profile, defaults, "cleanup");
-  if (cleanup !== undefined && cleanup !== null && cleanup !== "") payload.cleanup = cleanup;
+  if (nonEmpty(args.agentId)) payload.agentId = args.agentId;
+  if (nonEmpty(args.model)) payload.model = args.model;
+  if (nonEmpty(args.thinking)) payload.thinking = args.thinking;
+  if (args.runTimeoutSeconds !== undefined) payload.runTimeoutSeconds = args.runTimeoutSeconds;
+  if (nonEmpty(args.cleanup)) payload.cleanup = args.cleanup;
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
   const logLine = JSON.stringify({ ts: Math.floor(Date.now() / 1000), profile: args.profile, payload }, null, 0) + "\n";

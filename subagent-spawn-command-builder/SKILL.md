@@ -10,8 +10,6 @@ This skill does not execute `sessions_spawn`; it only builds payload/command JSO
 
 ## Files
 
-- Profile template: `state/spawn-profiles.template.json`
-- Active profile config: `state/spawn-profiles.json`
 - Builder script: `scripts/build_spawn_payload.mjs`
 - Builder log: `state/build-log.jsonl`
 
@@ -27,12 +25,7 @@ This skill does not execute `sessions_spawn`; it only builds payload/command JSO
 
 ## Setup
 
-```bash
-cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
-   skills/subagent-spawn-command-builder/state/spawn-profiles.json
-```
-
-Then edit `spawn-profiles.json`.
+Read the "Subagent Spawn Profiles" table in TOOLS.md for default values per profile. Pass values as explicit CLI arguments (`--model`, `--thinking`, `--run-timeout-seconds`, `--cleanup`). The `--profile` flag is now a logging label, not a lookup key for a config file.
 
 ## Generate payload
 
@@ -40,18 +33,18 @@ Then edit `spawn-profiles.json`.
 skills/subagent-spawn-command-builder/scripts/build_spawn_payload.mjs \
   --profile heartbeat \
   --task "Analyze recent context and return a compact summary" \
-  --label heartbeat-test
+  --label heartbeat-test \
+  --model claude-sonnet-4-20250514 \
+  --thinking low \
+  --run-timeout-seconds 300 \
+  --cleanup delete
 ```
 
 The script prints JSON directly usable for `sessions_spawn`.
 
 ## Merge/priority rule
 
-Value resolution order is:
-
-1. CLI option (`--model`, `--thinking`, etc.)
-2. Profile value (`profiles.<name>.*`)
-3. Defaults value (`defaults.*`)
+All values come from explicit CLI arguments. `--profile` is a logging label only (not a config lookup key). Refer to the "Subagent Spawn Profiles" table in TOOLS.md for recommended defaults per profile.
 
 `task` always comes from CLI `--task`.
 

@@ -30,6 +30,5 @@ lorairo-mem/
 #完成度が低いので一旦無視
 rr-renamer/
 
-# 設定(state)は基本無視し、テンプレだけ追跡
+# ランタイム状態は無視（ユーザー設定はTOOLS.mdに移行済み）
 state/
-!soul-in-sapphire/state/subagent-models.template.json

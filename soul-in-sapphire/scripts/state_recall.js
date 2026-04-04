@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { loadConfig } from './emostate_config.js';
 import { queryRecent, textOf } from './emostate_notion.js';
 
 function nowIsoLocal() { return new Date().toISOString(); }
@@ -24,20 +23,20 @@ function normalizeStatePage(page) {
 }
 
 function parseArgs(argv) {
-  const out = { limit: 1, write: '' };
+  const out = { limit: 1, write: '', stateDsid: null };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--limit') out.limit = Number(argv[++i] || 1);
     else if (a === '--write') out.write = argv[++i] || '';
+    else if (a === '--state-dsid') out.stateDsid = argv[++i] || '';
   }
   return out;
 }
 
 function main() {
   const args = parseArgs(process.argv);
-  const cfg = loadConfig();
-  const dsId = cfg?.state?.data_source_id || cfg?.valentina_state_data_source_id;
-  if (!dsId) throw new Error('Missing state.data_source_id in config.json');
+  const dsId = args.stateDsid;
+  if (!dsId) throw new Error('Missing --state-dsid. Check TOOLS.md for the value.');
   const pages = queryRecent(dsId, Math.max(1, args.limit));
   const out = pages.map(normalizeStatePage);
   if (args.write) {

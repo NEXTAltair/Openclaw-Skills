@@ -46,30 +46,20 @@ function expandHome(p) {
 }
 
 function parseArgs(argv) {
-  const out = { payloadFile: null, payloadJson: null, help: false };
+  const out = { payloadFile: null, payloadJson: null, help: false,
+    eventsDbid: null, emotionsDbid: null, stateDbid: null, stateDsid: null };
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--help' || a === '-h') {
-      out.help = true;
-      continue;
-    }
-    if (a === '--payload-file') {
-      out.payloadFile = argv[++i] || '';
-      continue;
-    }
-    if (a.startsWith('--payload-file=')) {
-      out.payloadFile = a.slice('--payload-file='.length);
-      continue;
-    }
-    if (a === '--payload-json') {
-      out.payloadJson = argv[++i] || '';
-      continue;
-    }
-    if (a.startsWith('--payload-json=')) {
-      out.payloadJson = a.slice('--payload-json='.length);
-      continue;
-    }
+    if (a === '--help' || a === '-h') { out.help = true; continue; }
+    if (a === '--payload-file') { out.payloadFile = argv[++i] || ''; continue; }
+    if (a.startsWith('--payload-file=')) { out.payloadFile = a.slice('--payload-file='.length); continue; }
+    if (a === '--payload-json') { out.payloadJson = argv[++i] || ''; continue; }
+    if (a.startsWith('--payload-json=')) { out.payloadJson = a.slice('--payload-json='.length); continue; }
+    if (a === '--events-dbid') { out.eventsDbid = argv[++i] || ''; continue; }
+    if (a === '--emotions-dbid') { out.emotionsDbid = argv[++i] || ''; continue; }
+    if (a === '--state-dbid') { out.stateDbid = argv[++i] || ''; continue; }
+    if (a === '--state-dsid') { out.stateDsid = argv[++i] || ''; continue; }
     die(`Unknown argument: ${a}`);
   }
 
@@ -201,11 +191,6 @@ function propText(prop) {
   return '';
 }
 
-function readConfig() {
-  const p = path.join(os.homedir(), '.config', 'soul-in-sapphire', 'config.json');
-  if (!fs.existsSync(p)) die(`Missing config: ${p}. Run setup_ltm.js first.`);
-  return JSON.parse(fs.readFileSync(p, 'utf-8'));
-}
 
 function initialState() {
   const s = {};
@@ -324,12 +309,11 @@ async function main() {
   assertPayloadShape(payload);
   assertMeaningfulPayload(payload);
 
-  const cfg = readConfig();
-  const eventsDb = cfg?.events?.database_id || cfg.valentina_events_database_id;
-  const emotionsDb = cfg?.emotions?.database_id || cfg.valentina_emotions_database_id;
-  const stateDb = cfg?.state?.database_id || cfg.valentina_state_database_id;
-  const stateDs = cfg?.state?.data_source_id || cfg.valentina_state_data_source_id;
-  if (!(eventsDb && emotionsDb && stateDb && stateDs)) die('Config missing events/emotions/state ids. Re-run setup.');
+  const eventsDb = args.eventsDbid;
+  const emotionsDb = args.emotionsDbid;
+  const stateDb = args.stateDbid;
+  const stateDs = args.stateDsid;
+  if (!(eventsDb && emotionsDb && stateDb && stateDs)) die('Missing --events-dbid, --emotions-dbid, --state-dbid, --state-dsid. Check TOOLS.md for the values.');
 
   const event = payload.event || {};
   const emotions = payload.emotions || [];

@@ -81,23 +81,10 @@ function httpJson(method, apiPath, payload = undefined) {
   return obj.result || {};
 }
 
-function loadConfig(p = '~/.config/soul-in-sapphire/config.json') {
-  const fp = expandHome(p);
-  if (!fs.existsSync(fp)) {
-    throw new Error(`Missing config: ${fp}`);
-  }
-  const cfg = JSON.parse(fs.readFileSync(fp, 'utf-8'));
-  if ((!cfg.database_id || !cfg.data_source_id) && cfg.mem?.database_id && cfg.mem?.data_source_id) {
-    cfg.database_id = cfg.mem.database_id;
-    cfg.data_source_id = cfg.mem.data_source_id;
-  }
-  return cfg;
-}
-
 function requireIds(cfg) {
   for (const k of ['data_source_id', 'database_id']) {
-    if (!cfg?.[k]) throw new Error(`Config missing ${k}`);
+    if (!cfg?.[k]) throw new Error(`Missing ${k}. Check TOOLS.md for the value.`);
   }
 }
 
-export { httpJson, loadConfig, requireIds, expandHome };
+export { httpJson, requireIds, expandHome };

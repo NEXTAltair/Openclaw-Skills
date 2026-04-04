@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-import fs from 'fs';
-import { loadConfig, requireIds, httpJson } from './ltm_common.js';
+import { requireIds, httpJson } from './ltm_common.js';
 
 const propTitle = s => ({ title: [{ type: 'text', text: { content: String(s) } }] });
 const propRich = s => ({ rich_text: [{ type: 'text', text: { content: String(s || '') } }] });
@@ -16,8 +15,18 @@ async function readStdinJson() {
   return JSON.parse(raw);
 }
 
+function parseArgs(argv) {
+  const out = { memDsid: null, memDbid: null };
+  for (let i = 2; i < argv.length; i++) {
+    if (argv[i] === '--mem-dsid') out.memDsid = argv[++i] || '';
+    else if (argv[i] === '--mem-dbid') out.memDbid = argv[++i] || '';
+  }
+  return out;
+}
+
 async function main() {
-  const cfg = loadConfig();
+  const args = parseArgs(process.argv);
+  const cfg = { data_source_id: args.memDsid, database_id: args.memDbid };
   requireIds(cfg);
   const obj = await readStdinJson();
   const title = String(obj.title || '').trim();

@@ -2,19 +2,22 @@
 /**
  * Apply JSONL records to DIY_PC Notion tables (JS version).
  *
- * This is a port of notion_apply_records.py. It is intentionally deterministic:
+ * Deterministic upsert:
  * - reads JSONL from stdin
  * - upserts by configured keys
  * - patches only missing fields unless overwrite=true
  *
- * Config:
- * - DIY_PC_INGEST_CONFIG (path) OR ~/.config/diy-pc-ingest/config.json
- * - Notion auth/API is delegated to notion-api-automation/scripts/notionctl.mjs
- * - Notion version: NOTION_VERSION env or default 2025-09-03
+ * All Notion IDs are passed as CLI arguments (see TOOLS.md for values):
+ *   --pcconfig-dsid / --pcconfig-dbid
+ *   --pcinput-dsid  / --pcinput-dbid
+ *   --storage-dsid  / --storage-dbid
+ *   --enclosure-dsid / --enclosure-dbid
+ *
+ * Notion auth/API is delegated to notion-api-automation/scripts/notionctl.mjs
+ * Notion version: NOTION_VERSION env or default 2025-09-03
  */
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const { execFileSync } = require('node:child_process');
 
@@ -26,119 +29,42 @@ function die(msg) {
   process.exit(1);
 }
 
-function readJsonFile(p) {
-  try {
-    return JSON.parse(fs.readFileSync(p, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
+// Target schema: title_prop and key arrays are schema-derived constants.
+const TARGET_SCHEMA = {
+  pcconfig:  { title_prop: 'Name', key: ['Name', 'Purchase Date'] },
+  pcinput:   { title_prop: '名前', key: ['型番', 'Serial', '名前'] },
+  storage:   { title_prop: 'Name', key: ['シリアル'] },
+  enclosure: { title_prop: 'Name', key: ['取り外し表示名', 'Name'] },
+};
 
-
-async function bootstrapConfig(outPath) {
-  // Inline bootstrap (same behavior as scripts/bootstrap_config.js) to keep a single entrypoint.
-  const names = {
-    pcconfig: 'PCConfig',
-    pcinput: 'PCInput',
-    storage: 'ストレージ',
-    enclosure: 'エンクロージャー',
-  };
-
-  async function searchDataSources(query) {
-    const j = await notionReq({}, 'POST', '/search', { query, page_size: 50 });
-    const results = j.results || [];
-    return results.filter(r => r && r.object === 'data_source');
-  }
-
-  function plainTitle(obj) {
-    const t = obj?.title || [];
-    return t.map(x => x?.plain_text || '').join('').trim();
-  }
-
-  async function resolveOneByName(wantName) {
-    const hits = await searchDataSources(wantName);
-    const exact = hits.filter(h => plainTitle(h) === wantName);
-    const cand = exact.length ? exact : hits;
-
-    if (cand.length === 0) {
-      die(`Notion data source not found via search: ${wantName}\n- Ensure the database is shared with your integration (Connect to).`);
+function parseArgs(argv) {
+  const out = {};
+  for (let i = 2; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith('--')) {
+      const k = a.slice(2);
+      out[k] = argv[++i] || '';
     }
-    if (cand.length > 1) {
-      const lines = cand.slice(0, 10).map(h => `- ${plainTitle(h)} (data_source_id=${h.id})`).join('\n');
-      die(`Multiple matches for data source name: ${wantName}\n${lines}\nPlease disambiguate by renaming the DB.`);
-    }
-
-    const ds = cand[0];
-    const dsFull = await notionReq({}, 'GET', `/data_sources/${ds.id}`);
-    const databaseId = dsFull?.database_id;
-    if (!databaseId) die(`Could not resolve database_id for data_source_id=${ds.id}`);
-    return { data_source_id: ds.id, database_id: databaseId, title: plainTitle(ds) };
-  }
-
-  const pcconfig = await resolveOneByName(names.pcconfig);
-  const pcinput = await resolveOneByName(names.pcinput);
-  const storage = await resolveOneByName(names.storage);
-  const enclosure = await resolveOneByName(names.enclosure);
-
-  const config = {
-    notion: {
-      version: process.env.NOTION_VERSION || '2025-09-03',
-      targets: {
-        pcconfig: { data_source_id: pcconfig.data_source_id, database_id: pcconfig.database_id, title_prop: 'Name', key: ['Name', 'Purchase Date'] },
-        pcinput: { data_source_id: pcinput.data_source_id, database_id: pcinput.database_id, title_prop: '名前', key: ['型番', 'Serial', '名前'] },
-        storage: { data_source_id: storage.data_source_id, database_id: storage.database_id, title_prop: 'Name', key: ['シリアル'] },
-        enclosure: { data_source_id: enclosure.data_source_id, database_id: enclosure.database_id, title_prop: 'Name', key: ['取り外し表示名', 'Name'] },
-      },
-    },
-  };
-
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, JSON.stringify(config, null, 2), 'utf-8');
-  return config;
-}
-async function loadConfig() {
-  let p = process.env.DIY_PC_INGEST_CONFIG;
-  if (!p) p = path.join(os.homedir(), '.config', 'diy-pc-ingest', 'config.json');
-  if (!fs.existsSync(p)) {
-    const allowBootstrap = String(process.env.DIY_PC_INGEST_BOOTSTRAP || '').trim() === '1';
-    if (!allowBootstrap) {
-      throw new Error(
-        `config not found: ${p}\n` +
-        `Create it manually from references/config.example.json, or run bootstrap explicitly:\n` +
-        `DIY_PC_INGEST_BOOTSTRAP=1 node skills/diy-pc-ingest/scripts/notion_apply_records.js < records.jsonl`
-      );
-    }
-    const cfg = await bootstrapConfig(p);
-    return cfg;
-  }
-  return readJsonFile(p) || {};
-}
-
-function notionVersion(cfg) {
-  return (cfg?.notion?.version || process.env.NOTION_VERSION || DEFAULT_NOTION_VERSION).trim();
-}
-
-function idsFromConfig(cfg) {
-  const t = cfg?.notion?.targets || {};
-  // Public-safe default structure: users must fill IDs.
-  const defaults = {
-    pcconfig: { data_source_id: null, database_id: null, title_prop: 'Name', key: ['Name', 'Purchase Date'] },
-    pcinput: { data_source_id: null, database_id: null, title_prop: '名前', key: ['型番', 'Serial', '名前'] },
-    storage: { data_source_id: null, database_id: null, title_prop: 'Name', key: ['シリアル'] },
-    enclosure: { data_source_id: null, database_id: null, title_prop: 'Name', key: ['取り外し表示名', 'Name'] },
-  };
-
-  const out = { ...defaults };
-  for (const [k, v] of Object.entries(t)) {
-    if (!v || typeof v !== 'object') continue;
-    out[k] = {
-      data_source_id: v.data_source_id ?? out[k]?.data_source_id ?? null,
-      database_id: v.database_id ?? out[k]?.database_id ?? null,
-      title_prop: v.title_prop ?? out[k]?.title_prop ?? 'Name',
-      key: Array.isArray(v.key) ? v.key : (out[k]?.key ?? []),
-    };
   }
   return out;
+}
+
+function idsFromArgs(args) {
+  const ids = {};
+  for (const target of Object.keys(TARGET_SCHEMA)) {
+    const dsid = args[`${target}-dsid`] || null;
+    const dbid = args[`${target}-dbid`] || null;
+    ids[target] = {
+      data_source_id: dsid,
+      database_id: dbid,
+      ...TARGET_SCHEMA[target],
+    };
+  }
+  return ids;
+}
+
+function notionVersion() {
+  return (process.env.NOTION_VERSION || DEFAULT_NOTION_VERSION).trim();
 }
 
 function safeEnv(extra = {}) {
@@ -157,7 +83,7 @@ function safeEnv(extra = {}) {
   return { ...env, ...extra };
 }
 
-async function notionReq(cfg, method, apiPath, body) {
+async function notionReq(method, apiPath, body) {
   const p = String(apiPath).startsWith('/v1/') ? String(apiPath) : `/v1${String(apiPath).startsWith('/') ? '' : '/'}${String(apiPath)}`;
   const args = [
     NOTIONCTL_PATH,
@@ -168,7 +94,7 @@ async function notionReq(cfg, method, apiPath, body) {
   ];
   if (body !== undefined && body !== null) args.push('--body-json', JSON.stringify(body));
 
-  const env = safeEnv({ NOTION_VERSION: notionVersion(cfg) });
+  const env = safeEnv({ NOTION_VERSION: notionVersion() });
 
   const out = execFileSync('node', args, { encoding: 'utf-8', env }).trim();
   const obj = out ? JSON.parse(out) : {};
@@ -214,15 +140,15 @@ function getValueFromRow(row, propName) {
   return null;
 }
 
-async function queryByTitle(cfg, dataSourceId, titleProp, contains, pageSize = 10) {
+async function queryByTitle(dataSourceId, titleProp, contains, pageSize = 10) {
   const body = { page_size: pageSize, filter: { property: titleProp, title: { contains } } };
-  const j = await notionReq(cfg, 'POST', `/data_sources/${dataSourceId}/query`, body);
+  const j = await notionReq('POST', `/data_sources/${dataSourceId}/query`, body);
   return j.results || [];
 }
 
-async function queryByRichText(cfg, dataSourceId, prop, contains, pageSize = 10) {
+async function queryByRichText(dataSourceId, prop, contains, pageSize = 10) {
   const body = { page_size: pageSize, filter: { property: prop, rich_text: { contains } } };
-  const j = await notionReq(cfg, 'POST', `/data_sources/${dataSourceId}/query`, body);
+  const j = await notionReq('POST', `/data_sources/${dataSourceId}/query`, body);
   return j.results || [];
 }
 
@@ -311,7 +237,7 @@ function buildPatch(schema, incoming, existingProps, overwrite) {
   return out;
 }
 
-async function findExisting(cfg, ids, target, schema, propsIn) {
+async function findExisting(ids, target, schema, propsIn) {
   const tcfg = ids[target];
   const ds = tcfg.data_source_id;
   const schProps = schema?.properties || {};
@@ -325,8 +251,8 @@ async function findExisting(cfg, ids, target, schema, propsIn) {
     const firstVal = normalize(propsIn[first]);
 
     let hits = [];
-    if (firstType === 'title') hits = await queryByTitle(cfg, ds, first, firstVal, 25);
-    else if (firstType === 'rich_text') hits = await queryByRichText(cfg, ds, first, firstVal, 25);
+    if (firstType === 'title') hits = await queryByTitle(ds, first, firstVal, 25);
+    else if (firstType === 'rich_text') hits = await queryByRichText(ds, first, firstVal, 25);
 
     const narrowed = hits.filter(row => {
       for (const k of keyProps) {
@@ -354,8 +280,8 @@ async function findExisting(cfg, ids, target, schema, propsIn) {
     if (!schemaProp) continue;
 
     let hits = [];
-    if (schemaProp.type === 'rich_text') hits = await queryByRichText(cfg, ds, keyProp, v, 10);
-    else if (schemaProp.type === 'title') hits = await queryByTitle(cfg, ds, keyProp, v, 10);
+    if (schemaProp.type === 'rich_text') hits = await queryByRichText(ds, keyProp, v, 10);
+    else if (schemaProp.type === 'title') hits = await queryByTitle(ds, keyProp, v, 10);
 
     if (hits.length === 1) return hits[0];
   }
@@ -365,7 +291,7 @@ async function findExisting(cfg, ids, target, schema, propsIn) {
     const title = propsIn?.Name || propsIn?.名前;
     if (!title) return null;
     const titleN = normalize(title);
-    const hits = await queryByTitle(cfg, ds, tcfg.title_prop, titleN, 10);
+    const hits = await queryByTitle(ds, tcfg.title_prop, titleN, 10);
     if (!hits || hits.length === 0) return null;
 
     const wantDate = propsIn?.['購入日'];
@@ -397,7 +323,7 @@ async function findExisting(cfg, ids, target, schema, propsIn) {
   return null;
 }
 
-async function createPage(cfg, ids, target, schema, title, properties) {
+async function createPage(ids, target, schema, title, properties) {
   const tcfg = ids[target];
   const titleProp = tcfg.title_prop;
   const schProps = schema?.properties || {};
@@ -416,23 +342,22 @@ async function createPage(cfg, ids, target, schema, title, properties) {
   }
 
   const body = { parent: { database_id: tcfg.database_id }, properties: outProps };
-  return await notionReq(cfg, 'POST', '/pages', body);
+  return await notionReq('POST', '/pages', body);
 }
 
-function requireIds(cfg, ids, target) {
+function requireIds(ids, target) {
   const t = ids[target] || {};
   const missing = [];
-  if (!t.data_source_id) missing.push(`${target}.data_source_id`);
-  if (!t.database_id) missing.push(`${target}.database_id`);
+  if (!t.data_source_id) missing.push(`--${target}-dsid`);
+  if (!t.database_id) missing.push(`--${target}-dbid`);
   if (missing.length) {
-    const cfgPath = process.env.DIY_PC_INGEST_CONFIG || '~/.config/diy-pc-ingest/config.json';
-    die(`Missing Notion IDs in config: ${missing.join(', ')}. Set them in ${cfgPath} (see references/config.example.json).`);
+    die(`Missing Notion IDs: ${missing.join(', ')}. Check TOOLS.md for the values.`);
   }
 }
 
 async function main() {
-  const cfg = await loadConfig();
-  const ids = idsFromConfig(cfg);
+  const args = parseArgs(process.argv);
+  const ids = idsFromArgs(args);
 
   const raw = fs.readFileSync(0, 'utf-8');
   const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -455,14 +380,14 @@ async function main() {
       continue;
     }
 
-    requireIds(cfg, ids, target);
+    requireIds(ids, target);
 
     const overwrite = Boolean(rec.overwrite);
     const pageId = rec.page_id || rec.id;
     const archive = Boolean(rec.archive || rec.archived);
 
     if (!cacheSchema[target]) {
-      cacheSchema[target] = await notionReq(cfg, 'GET', `/data_sources/${ids[target].data_source_id}`);
+      cacheSchema[target] = await notionReq('GET', `/data_sources/${ids[target].data_source_id}`);
     }
     const schema = cacheSchema[target];
 
@@ -471,14 +396,14 @@ async function main() {
 
     // direct page update
     if (pageId) {
-      const existingPage = await notionReq(cfg, 'GET', `/pages/${pageId}`);
+      const existingPage = await notionReq('GET', `/pages/${pageId}`);
       const patch = buildPatch(schema, propsIn, existingPage.properties || {}, overwrite);
       const body = {};
       if (Object.keys(patch).length) body.properties = patch;
       if (archive) body.archived = true;
 
       if (Object.keys(body).length) {
-        const updated = await notionReq(cfg, 'PATCH', `/pages/${pageId}`, body);
+        const updated = await notionReq('PATCH', `/pages/${pageId}`, body);
         summary.updated += 1;
         results.push({ action: 'updated', target, id: updated.id, url: updated.url });
       } else {
@@ -488,11 +413,11 @@ async function main() {
       continue;
     }
 
-    const existing = await findExisting(cfg, ids, target, schema, propsIn);
+    const existing = await findExisting(ids, target, schema, propsIn);
     if (existing) {
       const patch = buildPatch(schema, propsIn, existing.properties || {}, overwrite);
       if (Object.keys(patch).length) {
-        const updated = await notionReq(cfg, 'PATCH', `/pages/${existing.id}`, { properties: patch });
+        const updated = await notionReq('PATCH', `/pages/${existing.id}`, { properties: patch });
         summary.updated += 1;
         results.push({ action: 'updated', target, id: updated.id, url: updated.url });
       } else {
@@ -500,7 +425,7 @@ async function main() {
         results.push({ action: 'skipped', target, id: existing.id, url: existing.url });
       }
     } else {
-      const created = await createPage(cfg, ids, target, schema, String(title || '(untitled)'), propsIn);
+      const created = await createPage(ids, target, schema, String(title || '(untitled)'), propsIn);
       summary.created += 1;
       results.push({ action: 'created', target, id: created.id, url: created.url });
     }
@@ -514,9 +439,9 @@ async function main() {
         summary.skipped += 1;
         results.push({ action: 'skipped', target: 'pcconfig', reason: 'mirror_missing_fields' });
       } else {
-        requireIds(cfg, ids, 'pcconfig');
+        requireIds(ids, 'pcconfig');
         if (!cacheSchema.pcconfig) {
-          cacheSchema.pcconfig = await notionReq(cfg, 'GET', `/data_sources/${ids.pcconfig.data_source_id}`);
+          cacheSchema.pcconfig = await notionReq('GET', `/data_sources/${ids.pcconfig.data_source_id}`);
         }
         const pcSchema = cacheSchema.pcconfig;
         const pcProps = {
@@ -531,11 +456,11 @@ async function main() {
           Active: true,
           Notes: 'mirrored from storage',
         };
-        const pcExisting = await findExisting(cfg, ids, 'pcconfig', pcSchema, pcProps);
+        const pcExisting = await findExisting(ids, 'pcconfig', pcSchema, pcProps);
         if (pcExisting) {
           const pcPatch = buildPatch(pcSchema, pcProps, pcExisting.properties || {}, false);
           if (Object.keys(pcPatch).length) {
-            const pcUpdated = await notionReq(cfg, 'PATCH', `/pages/${pcExisting.id}`, { properties: pcPatch });
+            const pcUpdated = await notionReq('PATCH', `/pages/${pcExisting.id}`, { properties: pcPatch });
             summary.updated += 1;
             results.push({ action: 'updated', target: 'pcconfig', id: pcUpdated.id, url: pcUpdated.url, reason: 'mirrored' });
           } else {
@@ -543,7 +468,7 @@ async function main() {
             results.push({ action: 'skipped', target: 'pcconfig', id: pcExisting.id, url: pcExisting.url, reason: 'mirrored_no_changes' });
           }
         } else {
-          const pcCreated = await createPage(cfg, ids, 'pcconfig', pcSchema, String(name), pcProps);
+          const pcCreated = await createPage(ids, 'pcconfig', pcSchema, String(name), pcProps);
           summary.created += 1;
           results.push({ action: 'created', target: 'pcconfig', id: pcCreated.id, url: pcCreated.url, reason: 'mirrored' });
         }

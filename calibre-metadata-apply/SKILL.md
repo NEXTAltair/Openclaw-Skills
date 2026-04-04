@@ -1,7 +1,7 @@
 ---
 name: calibre-metadata-apply
 description: Primary skill for Calibre metadata edits over a running Content server. Use this for ID-based title/authors/series/series_index/tags/publisher/pubdate/languages updates and controlled apply after confirmation.
-metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json","~/.config/calibre-metadata-apply/auth.json","~/.config/calibre-metadata-apply/config.json"],"modifiesRemoteData":["calibre:metadata"]}}
+metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
 # calibre-metadata-apply
@@ -31,8 +31,8 @@ Do NOT route those requests to `calibre-catalog-read`.
   - If `LIBRARY_ID` is unknown, use `#-` once to list available IDs on the server.
 - `--with-library` can be omitted only when one of these is configured:
   - env: `CALIBRE_WITH_LIBRARY` or `CALIBRE_LIBRARY_URL` or `CALIBRE_CONTENT_SERVER_URL`
-  - config: `~/.config/calibre-metadata-apply/config.json` with `with_library`
-  - optional library id completion: `CALIBRE_LIBRARY_ID` or config `library_id`
+  - optional library id completion: `CALIBRE_LIBRARY_ID`
+- Read the "Calibre Content Server" section of TOOLS.md for the correct `--with-library` URL.
 - Host failover (IP change resilience):
   - Optional env: `CALIBRE_SERVER_HOSTS=host1,host2,...`
   - Script auto-tries candidates, including WSL host-side `nameserver` from `/etc/resolv.conf`.
@@ -44,7 +44,6 @@ Do NOT route those requests to `calibre-catalog-read`.
   - Do not pass auth mode arguments such as `--auth-mode` / `--auth-scheme`.
 - Pass `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
 - You can still override explicitly with `--username <user>`.
-- Optional auth cache: `--save-auth` (default file: `~/.config/calibre-metadata-apply/auth.json`)
 
 ## Supported fields
 
@@ -106,7 +105,7 @@ Do NOT route those requests to `calibre-catalog-read`.
 
 - Local execution:
   - Build `calibredb set_metadata` commands from JSONL.
-  - Read/write local state files (`state/runs.json`) and optional auth/config files under `~/.config/calibre-metadata-apply/`.
+  - Read/write local state files (`state/runs.json`).
 - Subagent execution (optional for heavy candidate generation):
   - Uses `sessions_spawn` via `subagent-spawn-command-builder`.
   - Text/metadata sent to subagent can reach model endpoints configured by runtime profile.
@@ -114,7 +113,6 @@ Do NOT route those requests to `calibre-catalog-read`.
   - `calibredb set_metadata` updates metadata on the target Calibre Content server.
 
 Security rules:
-- Do not use `--save-plain-password` unless explicitly instructed by the user.
 - Prefer env-based password (`--password-env CALIBRE_PASSWORD`) over inline `--password`.
 - If user does not want external model/subagent processing, keep flow local and skip subagent orchestration.
 - In agent/chat execution, do not call `calibredb` directly for edit operations.
@@ -125,7 +123,7 @@ Security rules:
 ## Connection bootstrap (mandatory)
 
 - Do not ask the user for `--with-library` first.
-- First, execute using saved defaults (env/config) with no explicit `--with-library`.
+- First, execute using saved defaults (env) with no explicit `--with-library`.
   - Scripts auto-load `.env` and resolve `CALIBRE_WITH_LIBRARY` / `CALIBRE_CONTENT_SERVER_URL`.
 - Ask user for URL only when command output shows unresolved connection, such as:
   - `missing --with-library`
@@ -218,10 +216,9 @@ Run state file:
 
 - Use user-configured `reading_script` for Japanese/non-Latin sort fields
   - `katakana` / `hiragana` / `latin`
-- Ask once on first use, then persist and reuse
+- Ask once on first use, then reuse for the session
 - Default policy is full reading (no truncation)
-- Config path: `~/.config/calibre-metadata-apply/config.json`
-  - key: `reading_script`
+- Read the "Calibre Content Server" section of TOOLS.md for the configured `reading_script` value; pass it as a CLI argument when needed.
 
 ## Usage
 

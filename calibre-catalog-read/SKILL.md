@@ -1,7 +1,7 @@
 ---
 name: calibre-catalog-read
 description: Read-only Calibre catalog lookup and one-book analysis-comments workflow over a running Content server. Use only for list/search/id and analysis comments block updates, never for title/authors/tags/series/series_index metadata edits.
-metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**","~/.config/calibre-catalog-read/auth.json"],"modifiesRemoteData":["calibre:comments-metadata"]}}
+metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
 # calibre-catalog-read
@@ -40,8 +40,8 @@ Do NOT use this skill for:
 - Do not assume localhost/127.0.0.1; always pass explicit reachable `HOST:PORT`.
 - `--with-library` can be omitted only when one of these is configured:
   - env: `CALIBRE_WITH_LIBRARY` or `CALIBRE_LIBRARY_URL` or `CALIBRE_CONTENT_SERVER_URL`
-  - config: `~/.config/calibre-catalog-read/config.json` with `with_library`
-  - optional library id completion: `CALIBRE_LIBRARY_ID` or config `library_id`
+  - optional library id completion: `CALIBRE_LIBRARY_ID`
+- Read the "Calibre Content Server" section of TOOLS.md for the correct `--with-library` URL.
 - Host failover (IP change resilience):
   - Optional env: `CALIBRE_SERVER_HOSTS=host1,host2,...`
   - Script auto-tries candidates, including WSL host-side `nameserver` from `/etc/resolv.conf`.
@@ -54,8 +54,6 @@ Do NOT use this skill for:
     - Do not pass auth mode arguments such as `--auth-mode` / `--auth-scheme`.
   - Then pass only `--password-env CALIBRE_PASSWORD` (username auto-loads from env)
   - You can still override with `--username <user>` explicitly.
-  - Optional auth cache file: `~/.config/calibre-catalog-read/auth.json`
-    - Avoid `--save-plain-password` unless explicitly requested.
 
 ## Commands
 

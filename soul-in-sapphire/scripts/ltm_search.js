@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { loadConfig, requireIds, httpJson } from './ltm_common.js';
+import { requireIds, httpJson } from './ltm_common.js';
 
 function textOf(prop) {
   if (!prop) return '';
@@ -18,11 +18,13 @@ function queryDs(dsId, prop, kind, q, pageSize) {
 }
 
 function parseArgs(argv) {
-  const out = { query: '', limit: 5 };
+  const out = { query: '', limit: 5, memDsid: null, memDbid: null };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--query') out.query = argv[++i] || '';
     else if (a === '--limit') out.limit = Number(argv[++i] || 5);
+    else if (a === '--mem-dsid') out.memDsid = argv[++i] || '';
+    else if (a === '--mem-dbid') out.memDbid = argv[++i] || '';
   }
   return out;
 }
@@ -30,7 +32,7 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv);
   if (!args.query.trim()) throw new Error('Empty query');
-  const cfg = loadConfig();
+  const cfg = { data_source_id: args.memDsid, database_id: args.memDbid };
   requireIds(cfg);
   const dsId = cfg.data_source_id;
 

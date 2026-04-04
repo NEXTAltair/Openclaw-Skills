@@ -6,16 +6,18 @@ import { patchDataSource } from './notionctl_bridge.js';
 
 function die(msg){ process.stderr.write(String(msg)+'\n'); process.exit(1); }
 
-function readConfig(){
-  const p=path.join(os.homedir(),'.config','soul-in-sapphire','config.json');
-  if(!fs.existsSync(p)) die(`Missing config: ${p}`);
-  return JSON.parse(fs.readFileSync(p,'utf-8'));
+function parseArgs(argv) {
+  const out = { journalDsid: null };
+  for (let i = 2; i < argv.length; i++) {
+    if (argv[i] === '--journal-dsid') out.journalDsid = argv[++i] || '';
+  }
+  return out;
 }
 
 async function main(){
-  const cfg=readConfig();
-  const dsid = cfg?.journal?.data_source_id || cfg.journal_data_source_id;
-  if(!dsid) die('Config missing journal_data_source_id. Re-run setup_ltm.js.');
+  const args = parseArgs(process.argv);
+  const dsid = args.journalDsid;
+  if(!dsid) die('Missing --journal-dsid. Check TOOLS.md for the value.');
 
   const moodOpts = ['clear','wired','dull','tense','playful','guarded','tender'].map(name=>({name}));
   const intentOpts = ['build','fix','organize','explore','rest','socialize','reflect'].map(name=>({name}));

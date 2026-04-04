@@ -54,16 +54,18 @@ function nowIso() {
   return `${iso}${sign}${hh}:${mm}`;
 }
 
-function readConfig() {
-  const p = path.join(os.homedir(), '.config', 'soul-in-sapphire', 'config.json');
-  if (!fs.existsSync(p)) die(`Missing config: ${p}. Run setup_ltm.js first.`);
-  return JSON.parse(fs.readFileSync(p, 'utf-8'));
+function parseArgs(argv) {
+  const out = { journalDbid: null };
+  for (let i = 2; i < argv.length; i++) {
+    if (argv[i] === '--journal-dbid') out.journalDbid = argv[++i] || '';
+  }
+  return out;
 }
 
 async function main() {
-  const cfg = readConfig();
-  const journalDb = cfg?.journal?.database_id || cfg.journal_database_id;
-  if (!journalDb) die('Config missing journal_database_id. Re-run setup_ltm.js.');
+  const args = parseArgs(process.argv);
+  const journalDb = args.journalDbid;
+  if (!journalDb) die('Missing --journal-dbid. Check TOOLS.md for the value.');
 
   const raw = fs.readFileSync(0, 'utf-8').trim();
   if (!raw) die('Expected JSON on stdin');

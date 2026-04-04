@@ -1,7 +1,7 @@
 ---
 name: soul-in-sapphire
 description: Long-term memory, state tracking, continuity review, and identity-change support for OpenClaw. Use for durable memory writes/search in Notion, emotion/state ticks, journal writes, continuity checks, identity diffs, inner-conflict tracking, and preserving a stable sense of self across sessions.
-metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"localReads":["~/.config/soul-in-sapphire/config.json"],"optionalEnv":["NOTIONCTL_PATH"]}}
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTIONCTL_PATH"]}}
 ---
 
 # soul-in-sapphire (Notion LTM + continuity)
@@ -33,9 +33,9 @@ The goal is continuity and growth, not archival volume.
 
 - Notion token: `NOTION_API_KEY` (or `NOTION_TOKEN`)
 - Notion API version: `2025-09-03`
-- Local config: `~/.config/soul-in-sapphire/config.json`
 - Dependency skill: `notion-api-automation` (`scripts/notionctl.mjs` is executed via local child process)
 - Optional override: `NOTIONCTL_PATH` (if set, uses explicit notionctl path instead of default sibling skill path)
+- Read the "Soul-in-Sapphire Notion Databases" table in TOOLS.md for the data_source_id and database_id values. Pass them as explicit CLI arguments (e.g. `--events-dbid`, `--emotions-dbid`, `--state-dbid`, `--state-dsid`, `--journal-dbid`, `--journal-dsid`, `--mem-dsid`, `--mem-dbid`).
 
 ## Required Notion databases and schema
 
@@ -267,6 +267,8 @@ Required action:
 node skills/soul-in-sapphire/scripts/setup_ltm.js --parent "<Notion parent page url>" --base "Valentina" --yes
 ```
 
+Setup outputs created database IDs to stdout. Copy these IDs into the "Soul-in-Sapphire Notion Databases" table in TOOLS.md.
+
 ### 2) LTM write
 
 ```bash
@@ -276,13 +278,16 @@ echo '{
   "tags":["notion","openclaw"],
   "content":"Use /v1/data_sources/{id}/query.",
   "confidence":"high"
-}' | node skills/soul-in-sapphire/scripts/ltm_write.js
+}' | node skills/soul-in-sapphire/scripts/ltm_write.js \
+  --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID>
 ```
 
 ### 3) LTM search
 
 ```bash
-node skills/soul-in-sapphire/scripts/ltm_search.js --query "data_sources" --limit 5
+node skills/soul-in-sapphire/scripts/ltm_search.js \
+  --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID> \
+  --query "data_sources" --limit 5
 ```
 
 ### 4) Emotion/state tick
@@ -295,13 +300,17 @@ cat <<'JSON' >/tmp/emostate_tick.json
   "state": {"mood_label":"clear","intent":"build","reason":"..."}
 }
 JSON
-node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
+node skills/soul-in-sapphire/scripts/emostate_tick.js \
+  --events-dbid <EVENTS_DB_ID> --emotions-dbid <EMOTIONS_DB_ID> \
+  --state-dbid <STATE_DB_ID> --state-dsid <STATE_DS_ID> \
+  --payload-file /tmp/emostate_tick.json
 ```
 
 ### 5) Journal write
 
 ```bash
-echo '{"body":"...","source":"cron"}' | node skills/soul-in-sapphire/scripts/journal_write.js
+echo '{"body":"...","source":"cron"}' | node skills/soul-in-sapphire/scripts/journal_write.js \
+  --journal-dbid <JOURNAL_DB_ID> --journal-dsid <JOURNAL_DS_ID>
 ```
 
 ### 6) Continuity check
@@ -352,12 +361,12 @@ JSON
 Use the shared skill `subagent-spawn-command-builder` to generate `sessions_spawn` payload JSON.
 Do not use `soul-in-sapphire` local planner scripts for this anymore.
 
-- Template: `skills/subagent-spawn-command-builder/state/spawn-profiles.template.json`
-- Active preset: `skills/subagent-spawn-command-builder/state/spawn-profiles.json`
+- Read the "Subagent Spawn Profiles" table in TOOLS.md for profile defaults.
 - Builder usage (skill-level):
   - Call `subagent-spawn-command-builder`
-  - Use profile `<heartbeat|journal>`
-  - Provide the run-specific task text
+  - Use `--profile <heartbeat|journal>` (logging label)
+  - Pass explicit args: `--model`, `--thinking`, `--run-timeout-seconds`, `--cleanup`
+  - Provide the run-specific `--task` text
 
 Output is ready-to-use JSON for `sessions_spawn`.
 

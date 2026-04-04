@@ -63,7 +63,6 @@ function parseArgs(argv) {
     parent: null,
     base: null,
     yes: false,
-    outPath: path.join(os.homedir(), '.config', 'soul-in-sapphire', 'config.json'),
     workspaceRoot: fallbackWorkspaceRoot,
   };
   const args = argv.slice(2);
@@ -71,10 +70,9 @@ function parseArgs(argv) {
     const a = args[i];
     if (a === '--parent') out.parent = args[++i];
     else if (a === '--base') out.base = args[++i];
-    else if (a === '--out') out.outPath = args[++i];
     else if (a === '--yes') out.yes = true;
     else if (a === '--help' || a === '-h') {
-      console.log('Usage: node setup_ltm.js --parent <url|page_id> [--base <name>] [--out <path>] [--yes]');
+      console.log('Usage: node setup_ltm.js --parent <url|page_id> [--base <name>] [--yes]');
       process.exit(0);
     } else {
       die(`Unknown arg: ${a}`);
@@ -234,10 +232,7 @@ async function main() {
     journal_data_source_id: journal.dataSourceId,
   };
 
-  fs.mkdirSync(path.dirname(args.outPath), { recursive: true });
-  fs.writeFileSync(args.outPath, JSON.stringify(cfg, null, 2) + '\n', 'utf-8');
-
-  console.log(JSON.stringify({ ok: true, out: args.outPath, created, config: cfg }, null, 2));
+  console.log(JSON.stringify({ ok: true, created, config: cfg, hint: 'Copy the database IDs above into TOOLS.md' }, null, 2));
 }
 
 main().catch(err => die(err?.stack || err?.message || String(err)));

@@ -7,8 +7,6 @@ import { spawnSync } from 'node:child_process';
 const ALLOWED = new Set(['title','title_sort','authors','author_sort','series','series_index','tags','publisher','pubdate','languages','comments']);
 const OC_START = '<!-- OC_ANALYSIS_START -->';
 const OC_END = '<!-- OC_ANALYSIS_END -->';
-const DEFAULT_AUTH_FILE = path.join(os.homedir(), '.config', 'calibre-metadata-apply', 'auth.json');
-const DEFAULT_CONFIG_FILE = path.join(os.homedir(), '.config', 'calibre-metadata-apply', 'config.json');
 const WITH_LIBRARY_ENV_KEYS = ['CALIBRE_WITH_LIBRARY', 'CALIBRE_LIBRARY_URL', 'CALIBRE_CONTENT_SERVER_URL'];
 const LIBRARY_ID_ENV_KEYS = ['CALIBRE_LIBRARY_ID'];
 const SERVER_HOSTS_ENV_KEYS = ['CALIBRE_SERVER_HOSTS'];
@@ -63,15 +61,13 @@ function parseArgs(argv) {
     apply: false,
     lang: 'ja',
     'password-env': 'CALIBRE_PASSWORD',
-    'auth-file': DEFAULT_AUTH_FILE,
-    'config-file': DEFAULT_CONFIG_FILE,
     _: [],
   };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith('--')) { out._.push(a); continue; }
     const k = a.slice(2);
-    if (['apply','save-auth','save-plain-password'].includes(k)) out[k] = true;
+    if (['apply'].includes(k)) out[k] = true;
     else out[k] = argv[++i];
   }
   return out;
@@ -107,28 +103,6 @@ function runOk(cmd) {
   return out;
 }
 
-function loadAuthFile(p) {
-  try {
-    if (!fs.existsSync(p)) return {};
-    const d = JSON.parse(fs.readFileSync(p, 'utf-8'));
-    const o = {};
-    for (const k of ['username','password','password_env']) {
-      const v = d?.[k];
-      if (typeof v === 'string' && v.trim()) o[k] = v.trim();
-    }
-    return o;
-  } catch { return {}; }
-}
-
-function loadConfigFile(p) {
-  try {
-    if (!fs.existsSync(p)) return {};
-    const d = JSON.parse(fs.readFileSync(p, 'utf-8'));
-    return d && typeof d === 'object' && !Array.isArray(d) ? d : {};
-  } catch {
-    return {};
-  }
-}
 
 function splitList(v) {
   if (v == null) return [];
@@ -227,12 +201,9 @@ function validateWithLibrary(value) {
 }
 
 function buildWithLibraryCandidates(args) {
-  const cfg = loadConfigFile(String(args['config-file'] || DEFAULT_CONFIG_FILE));
   const libraryId = pickFirstNonEmpty([
     args['library-id'],
     ...LIBRARY_ID_ENV_KEYS.map(k => process.env[k]),
-    cfg.library_id,
-    cfg.libraryId,
   ]);
 
   const baseCandidates = [];
@@ -240,15 +211,10 @@ function buildWithLibraryCandidates(args) {
   for (const k of WITH_LIBRARY_ENV_KEYS) {
     if (process.env[k]) baseCandidates.push({ source: `env:${k}`, value: String(process.env[k]) });
   }
-  for (const [k, source] of [['with_library', 'config:with_library'], ['withLibrary', 'config:withLibrary'], ['content_server_url', 'config:content_server_url'], ['contentServerUrl', 'config:contentServerUrl']]) {
-    if (cfg[k]) baseCandidates.push({ source, value: String(cfg[k]) });
-  }
 
   const extraHosts = [
     ...splitList(args['server-hosts']),
     ...SERVER_HOSTS_ENV_KEYS.flatMap(k => splitList(process.env[k])),
-    ...splitList(cfg.server_hosts),
-    ...splitList(cfg.serverHosts),
     ...discoverWslHostCandidates(),
     'host.docker.internal',
   ]
@@ -256,7 +222,7 @@ function buildWithLibraryCandidates(args) {
     .filter(Boolean);
 
   if (!baseCandidates.length) {
-    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL, or config.with_library)');
+    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL). Check TOOLS.md for the value.');
   }
 
   const expanded = [];
@@ -353,34 +319,16 @@ function resolveWithLibrary(args, auth) {
   throw new Error(`unable to resolve usable --with-library\n${errors.map(e => `- ${e}`).join('\n')}\nHint: set CALIBRE_SERVER_HOSTS (comma-separated) for host failover.`);
 }
 
-function saveAuthFile(p, { username, password, passwordEnv }) {
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const payload = { username };
-  if (password) payload.password = password;
-  if (passwordEnv) payload.password_env = passwordEnv;
-  fs.writeFileSync(p, JSON.stringify(payload, null, 2) + '\n', 'utf-8');
-  fs.chmodSync(p, 0o600);
-}
-
 function resolveAuth(args) {
-  const auth = loadAuthFile(String(args['auth-file'] || DEFAULT_AUTH_FILE));
-  const username = args.username || auth.username || (process.env.CALIBRE_USERNAME || '').trim() || null;
-  let password = args.password || '';
-  if (!password && args['password-env']) password = process.env[String(args['password-env'])] || '';
-  if (!password && auth.password_env) password = process.env[auth.password_env] || '';
-  if (!password) password = auth.password || '';
-  const usedPasswordEnv = args['password-env'] || auth.password_env || null;
+  const envUser = (process.env.CALIBRE_USERNAME || '').trim();
+  const username = args.username ? String(args.username) : (envUser || null);
 
-  if (args['save-auth']) {
-    if (!username) throw new Error('--save-auth requires username (provide --username or CALIBRE_USERNAME or existing auth file)');
-    if (!password && !usedPasswordEnv) throw new Error('--save-auth requires password source (--password or --password-env with env value)');
-    saveAuthFile(String(args['auth-file']), {
-      username,
-      password: args['save-plain-password'] ? password : null,
-      passwordEnv: usedPasswordEnv,
-    });
-  }
-  return { username, password, usedPasswordEnv };
+  let password = args.password ? String(args.password) : '';
+  const passwordEnv = args['password-env'] ? String(args['password-env']) : 'CALIBRE_PASSWORD';
+
+  if (!password && passwordEnv) password = process.env[passwordEnv] || '';
+
+  return { username, password, usedPasswordEnv: passwordEnv };
 }
 
 function commonArgs(args, auth) {
