@@ -12,22 +12,20 @@ node_modules/
 # ClawHub metadata
 .clawhub/
 
-#Clawhubから導入
+# ClawHub経由でインストール（origin.jsonで管理）
 context7/
 sonoscli/
 notion-api-automation/
-moltbook/
-self-improving-agent/
-homeassistant-skill/
-skill-vetter/
 vassili-clawhub-cli/
+homeassistant-skill/
+self-improvement/
+moltbook-interact/
+skill-vetter/
 
-
-#user環境依存が強いので一旦無視
+# 自作・非公開（環境依存が強い）
 lorairo-mem/
 
-
-#完成度が低いので一旦無視
+# 完成度が低いので一旦無視
 rr-renamer/
 
 # ランタイム状態は無視（ユーザー設定はTOOLS.mdに移行済み）

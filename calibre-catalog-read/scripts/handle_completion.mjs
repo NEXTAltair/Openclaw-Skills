@@ -6,7 +6,6 @@ import { spawnSync } from 'node:child_process';
 
 const SCRIPT_DIR = path.dirname(new URL(import.meta.url).pathname);
 const DEFAULT_STATE_PATH = path.resolve(SCRIPT_DIR, '..', 'state', 'runs.json');
-const DEFAULT_CONFIG_FILE = path.join(os.homedir(), '.config', 'calibre-catalog-read', 'config.json');
 const WITH_LIBRARY_ENV_KEYS = ['CALIBRE_WITH_LIBRARY', 'CALIBRE_LIBRARY_URL', 'CALIBRE_CONTENT_SERVER_URL'];
 const LIBRARY_ID_ENV_KEYS = ['CALIBRE_LIBRARY_ID'];
 const SERVER_HOSTS_ENV_KEYS = ['CALIBRE_SERVER_HOSTS'];
@@ -73,16 +72,6 @@ function assertDigestAuthModeFixed(args) {
   throw new Error(
     `unsupported --${provided}: auth scheme is fixed to Digest for non-SSL Content server usage. Remove auth mode arguments.`,
   );
-}
-
-function loadConfigFile(p) {
-  try {
-    if (!fs.existsSync(p)) return {};
-    const d = JSON.parse(fs.readFileSync(p, 'utf-8'));
-    return d && typeof d === 'object' && !Array.isArray(d) ? d : {};
-  } catch {
-    return {};
-  }
 }
 
 function splitList(v) {
@@ -182,12 +171,9 @@ function validateWithLibrary(value) {
 }
 
 function buildWithLibraryCandidates(args) {
-  const cfg = loadConfigFile(String(args['config-file'] || DEFAULT_CONFIG_FILE));
   const libraryId = pickFirstNonEmpty([
     args['library-id'],
     ...LIBRARY_ID_ENV_KEYS.map(k => process.env[k]),
-    cfg.library_id,
-    cfg.libraryId,
   ]);
 
   const baseCandidates = [];
@@ -195,15 +181,10 @@ function buildWithLibraryCandidates(args) {
   for (const k of WITH_LIBRARY_ENV_KEYS) {
     if (process.env[k]) baseCandidates.push({ source: `env:${k}`, value: String(process.env[k]) });
   }
-  for (const [k, source] of [['with_library', 'config:with_library'], ['withLibrary', 'config:withLibrary'], ['content_server_url', 'config:content_server_url'], ['contentServerUrl', 'config:contentServerUrl']]) {
-    if (cfg[k]) baseCandidates.push({ source, value: String(cfg[k]) });
-  }
 
   const extraHosts = [
     ...splitList(args['server-hosts']),
     ...SERVER_HOSTS_ENV_KEYS.flatMap(k => splitList(process.env[k])),
-    ...splitList(cfg.server_hosts),
-    ...splitList(cfg.serverHosts),
     ...discoverWslHostCandidates(),
     'host.docker.internal',
   ]
@@ -211,7 +192,7 @@ function buildWithLibraryCandidates(args) {
     .filter(Boolean);
 
   if (!baseCandidates.length) {
-    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL, or config.with_library)');
+    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL)');
   }
 
   const expanded = [];

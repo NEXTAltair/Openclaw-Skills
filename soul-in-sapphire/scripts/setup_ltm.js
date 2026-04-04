@@ -6,11 +6,10 @@
  *   <base>-mem, <base>-events, <base>-emotions, <base>-state
  *
  * Base defaults to IDENTITY.md Name (workspace root) if found.
- * Writes ~/.config/soul-in-sapphire/config.json
+ * Outputs JSON with database IDs to stdout (copy values into TOOLS.md)
  */
 
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,13 +46,6 @@ function identityName(workspaceRoot) {
   let name = m[1].trim();
   name = name.replace(/\s*\(.*?\)\s*$/, '').trim();
   return name || null;
-}
-
-function expandHome(p) {
-  if (!p) return p;
-  if (p === '~') return os.homedir();
-  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2));
-  return p;
 }
 
 function parseArgs(argv) {
