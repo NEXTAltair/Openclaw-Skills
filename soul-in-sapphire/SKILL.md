@@ -31,6 +31,12 @@ The goal is continuity and growth, not archival volume.
 
 ## Requirements
 
+Install the required dependency skill via ClawHub before using this skill:
+
+```
+clawhub install notion-api-automation
+```
+
 - Notion token: `NOTION_API_KEY` (or `NOTION_TOKEN`)
 - Notion API version: `2025-09-03`
 - Dependency skill: `notion-api-automation` (`scripts/notionctl.mjs` is executed via local child process)

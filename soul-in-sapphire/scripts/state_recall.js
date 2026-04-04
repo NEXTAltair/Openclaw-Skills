@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'fs';
 import path from 'path';
-import { queryRecent, textOf } from './emostate_notion.js';
+import { queryRecent, textOf } from './notionctl_bridge.js';
 
 function nowIsoLocal() { return new Date().toISOString(); }
 function parseStateJson(s) { try { return s ? JSON.parse(s) : {}; } catch { return { _raw: s }; } }

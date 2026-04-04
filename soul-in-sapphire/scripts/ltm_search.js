@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { requireIds, httpJson } from './ltm_common.js';
+import { requireIds, httpJson } from './notionctl_bridge.js';
 
 function textOf(prop) {
   if (!prop) return '';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { requireIds, httpJson } from './ltm_common.js';
+import { requireIds, httpJson } from './notionctl_bridge.js';
 
 const propTitle = s => ({ title: [{ type: 'text', text: { content: String(s) } }] });
 const propRich = s => ({ rich_text: [{ type: 'text', text: { content: String(s || '') } }] });

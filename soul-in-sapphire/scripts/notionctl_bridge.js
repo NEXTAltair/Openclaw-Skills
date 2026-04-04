@@ -46,6 +46,14 @@ function extractExecFailure(err) {
   return { stdout, stderr, msg };
 }
 
+function normalizeApiPath(apiPath) {
+  const p = String(apiPath || '').trim();
+  if (!p) throw new Error('Missing apiPath');
+  if (p.startsWith('/v1/') || p === '/v1') return p;
+  if (p.startsWith('/')) return `/v1${p}`;
+  return `/v1/${p}`;
+}
+
 function runApi(method, apiPath, body = null) {
   const args = [notionctlPath(), 'api', '--compact', '--method', String(method).toUpperCase(), '--path', String(apiPath)];
   if (body != null) args.push('--body-json', JSON.stringify(body));
@@ -129,6 +137,42 @@ async function queryDataSource(dataSourceId, body = {}) {
   return runApi('POST', `/v1/data_sources/${dataSourceId}/query`, body || {});
 }
 
+function httpJson(method, apiPath, payload = undefined) {
+  return runApi(method, normalizeApiPath(apiPath), payload === undefined ? null : payload);
+}
+
+function requireIds(cfg) {
+  for (const k of ['data_source_id', 'database_id']) {
+    if (!cfg?.[k]) throw new Error(`Missing ${k}. Check TOOLS.md for the value.`);
+  }
+}
+
+function textOf(prop) {
+  if (!prop) return '';
+  const t = prop.type;
+  if (t === 'title' || t === 'rich_text') return (prop[t] || []).map(x => x?.plain_text || '').join('').trim();
+  if (t === 'select') return prop.select?.name || '';
+  if (t === 'multi_select') return (prop.multi_select || []).map(x => x?.name).filter(Boolean);
+  if (t === 'number') return prop.number;
+  if (t === 'date') return prop.date?.start || '';
+  if (t === 'url') return prop.url || '';
+  if (t === 'relation') return (prop.relation || []).map(x => x?.id).filter(Boolean);
+  return '';
+}
+
+function queryRecent(dsId, pageSize = 10) {
+  const body = { page_size: pageSize, sorts: [{ timestamp: 'created_time', direction: 'descending' }] };
+  const res = runApi('POST', `/v1/data_sources/${dsId}/query`, body);
+  return res?.results || [];
+}
+
+function patchPage(pageId, properties = undefined, archived = undefined) {
+  const b = {};
+  if (properties !== undefined) b.properties = properties;
+  if (archived !== undefined) b.archived = !!archived;
+  return runApi('PATCH', `/v1/pages/${pageId}`, b);
+}
+
 export {
   extractPageId,
   listChildDatabases,
@@ -138,4 +182,9 @@ export {
   relationSingleProperty,
   createPage,
   queryDataSource,
+  httpJson,
+  requireIds,
+  textOf,
+  queryRecent,
+  patchPage,
 };

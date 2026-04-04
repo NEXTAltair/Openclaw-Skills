@@ -10,6 +10,12 @@ metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"op
 
 This skill is intended to be shared. Do **not** hardcode your Notion IDs or token in the skill.
 
+Install the required dependency skill via ClawHub before using this skill:
+
+```
+clawhub install notion-api-automation
+```
+
 1) Read the "DIY-PC Notion Targets" table in TOOLS.md for the data_source_id and database_id values for each target. Pass them as explicit CLI arguments:
 - `--pcconfig-dsid`, `--pcconfig-dbid`
 - `--pcinput-dsid`, `--pcinput-dbid`
