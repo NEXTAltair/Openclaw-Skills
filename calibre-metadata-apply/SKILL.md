@@ -1,6 +1,6 @@
 ---
 name: calibre-metadata-apply
-description: Primary skill for Calibre metadata edits over a running Content server. Use this for ID-based title/authors/series/series_index/tags/publisher/pubdate/languages updates and controlled apply after confirmation.
+description: Primary skill for Calibre metadata edits (write operations) over a running Content server. Use ONLY when the user explicitly requests changing/editing/fixing title/authors/series/series_index/tags/publisher/pubdate/languages. Never use for read-only lookups, even if an ID is mentioned.
 metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
@@ -11,7 +11,8 @@ A skill for updating metadata of existing Calibre books.
 ## Skill selection contract (strict)
 
 - If the user intent is metadata edit/fix/update, this skill is mandatory.
-- If the request mentions ID-based title fix (e.g. `ID1011 タイトル修正`), this skill is mandatory.
+- If the request mentions an ID **together with edit/fix/update intent** (e.g. `ID1011 タイトル修正`, `ID1011 のタイトルを直して`), this skill is mandatory.
+- If the request mentions an ID but only for viewing/checking/confirming (e.g. `ID1021 を確認して`, `ID1021 の詳細`), do NOT use this skill — route to `calibre-catalog-read`.
 - `calibre-catalog-read` must not be used for those edit intents.
 
 Use this skill when the user asks any of:
@@ -19,7 +20,10 @@ Use this skill when the user asks any of:
 - "メタデータ編集"
 - `title/authors/series/series_index/tags/publisher/pubdate/languages` updates
 
-Do NOT route those requests to `calibre-catalog-read`.
+Do NOT use this skill for:
+- Read-only lookups (e.g. "ID 1021 を確認して", "ID 1021 の情報を見せて", "show me book 1021")
+- Checking what metadata a book currently has without intent to change it
+- Those must use `calibre-catalog-read`
 
 ## Requirements
 

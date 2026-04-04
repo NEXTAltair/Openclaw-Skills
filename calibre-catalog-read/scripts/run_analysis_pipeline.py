@@ -185,6 +185,7 @@ def main():
     ap.add_argument("--analysis-json", help="Optional path to subagent-produced analysis JSON (schema in references/subagent-analysis.schema.json)")
     ap.add_argument("--min-text-chars", type=int, default=1200, help="Minimum extracted text chars before proceeding without confirmation")
     ap.add_argument("--force-low-text", action="store_true", help="Proceed even when extracted text is below threshold")
+    ap.add_argument("--allow-fallback", action="store_true", help="Persist local fallback analysis to DB/comments (testing only)")
     ns = ap.parse_args()
 
     pw = os.environ.get(ns.password_env, "")
@@ -240,9 +241,19 @@ def main():
         }, ensure_ascii=False))
         return
 
+    is_fallback = False
     if ns.analysis_json:
         analysis_core = json.loads(Path(ns.analysis_json).read_text())
     else:
+        is_fallback = True
+        if not ns.allow_fallback:
+            print(json.dumps({
+                "ok": True, "updated": False,
+                "book_id": ns.book_id, "title": title, "file_hash": fhash,
+                "analysis_mode": "fallback",
+                "text_path": str(txt),
+            }, ensure_ascii=False))
+            return
         analysis_core = simple_analysis(extracted, ns.lang)
 
     record = {
@@ -255,7 +266,7 @@ def main():
         "summary": analysis_core["summary"],
         "highlights": analysis_core["highlights"],
         "reread": analysis_core["reread"],
-        "tags": ["ai-summary", "cached-analysis"],
+        "tags": ["ai-summary", "cached-analysis"] + (["fallback"] if is_fallback else []),
     }
 
     # upsert cache record
@@ -289,7 +300,7 @@ def main():
         "--field", f"comments:{merged_comments}",
     ])
 
-    print(json.dumps({"ok": True, "book_id": ns.book_id, "title": title, "file_hash": fhash, "updated": True}, ensure_ascii=False))
+    print(json.dumps({"ok": True, "book_id": ns.book_id, "title": title, "file_hash": fhash, "updated": True, "analysis_mode": "fallback" if is_fallback else "subagent"}, ensure_ascii=False))
 
 
 if __name__ == "__main__":

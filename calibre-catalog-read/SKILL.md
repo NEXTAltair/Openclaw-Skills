@@ -1,6 +1,6 @@
 ---
 name: calibre-catalog-read
-description: Read-only Calibre catalog lookup and one-book analysis-comments workflow over a running Content server. Use only for list/search/id and analysis comments block updates, never for title/authors/tags/series/series_index metadata edits.
+description: Read-only Calibre catalog lookup (including ID-based read-only lookups like "ID 1021 を確認して") and one-book analysis-comments workflow over a running Content server. Use for any list/search/id viewing even when a specific ID is mentioned. Never for title/authors/tags/series/series_index metadata edits.
 metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
@@ -8,6 +8,7 @@ metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-conver
 
 Use this skill for:
 - Read-only catalog lookup (`list/search/id`)
+- ID-based read-only lookups: "ID 1021 を確認して", "1021番の詳細", "show me book 1021", "ID 1021 の情報を見せて"
 - One-book AI reading workflow (`export -> analyze -> cache -> comments HTML apply`)
 - Natural conversational book-reference turns where a lightweight read-only lookup would improve the reply
   - Examples: the user mentions a book that may exist in the library, suggests "if you're interested, read it", asks whether it is in the library, or continues a reading-related conversation without using explicit command wording
@@ -28,6 +29,11 @@ Do NOT use this skill for:
 - Any user request that says "metadata edit", "title fix", "ID指定で編集"
 - Heavy one-book analysis when the user only made a casual conversational reference and did not ask for reading/analysis
 - Those must use `calibre-metadata-apply`
+
+### Routing: ID in request ≠ edit intent
+- ID が含まれるリクエストはデフォルトで読み取り専用 → このスキル
+- `calibre-metadata-apply` へのルーティングは明示的な編集動詞がある場合のみ (修正/編集/変更/直す/fix/edit/update/change)
+- 確認/見せて/教えて/詳細/check/show/view は読み取り → このスキル
 
 ## Requirements
 
@@ -204,7 +210,7 @@ Required runtime sequence:
 3. Subagent reads all `source_files` and returns analysis JSON (schema-conformant).
 4. Main agent passes that file via `--analysis-json` to `run_analysis_pipeline.py` for DB/apply.
 
-If step 2 is skipped, pipeline falls back to local minimal analysis (only for emergency/testing).
+If step 2 is skipped and `--analysis-json` is not provided, the pipeline returns `updated: false, analysis_mode: fallback` without writing to DB or Calibre comments. Pass `--allow-fallback` to force-persist local analysis (testing only).
 
 
 ## Chat execution model (required, strict)
