@@ -17,15 +17,31 @@ Use when user explicitly asks to edit/fix/update/change:
 - tags, publisher, pubdate, languages
 - comments, analysis, analysis_tags
 
-Do not use for read-only requests such as ID1021 を確認して, 詳細, show/view/check. Route those to calibre-catalog-read.
+Do not use for read-only requests such as `ID1021 を確認して`, 詳細, show/view/check. Route those to `calibre-catalog-read`.
 
 ID + edit verb means this skill. ID without edit verb means read-only.
 
-## Safety contract
+## Supported Fields
+
+Core fields:
+- `title`, `title_sort`
+- `authors` as string with `&` or array, `author_sort`
+- `series`, `series_index`
+- `tags` as string or array, `publisher`, `pubdate` as `YYYY-MM-DD`, `languages`
+- `comments`
+
+Extended fields:
+- `comments_html`: OC marker block upsert.
+- `analysis`: auto-generates analysis HTML for comments.
+- `analysis_tags`: adds tags.
+- `tags_merge`: default true.
+- `tags_remove`: remove specific tags after merge.
+
+## Safety Contract
 
 Required flow:
 1. Run read-only lookup to narrow candidates.
-2. Show id,title,authors,series,series_index.
+2. Show `id,title,authors,series,series_index`.
 3. Get user confirmation for target IDs.
 4. Build JSONL only for confirmed IDs.
 5. Dry-run first.
@@ -36,18 +52,23 @@ Never:
 - Apply ambiguous title matches.
 - Include unconfirmed IDs.
 - Auto-fill low-confidence candidates.
-- Start calibre-server.
+- Start `calibre-server`.
 - Pass Calibre password inline.
+- Use direct `calibredb` for chat/agent edit operations; use wrapper scripts.
 
-## Local facts
+## Local Facts
 
 Read TOOLS.md for Content server URL, library id, auth, and reading script.
 
 Connection bootstrap:
-- First use saved defaults with no explicit --with-library.
-- Scripts auto-load .env.
+- Do not ask the user for `--with-library` first.
+- First use saved defaults with no explicit `--with-library`.
+- Scripts auto-load `.env`.
 - Non-SSL auth is Digest; do not pass auth-mode/auth-scheme flags.
-- Ask for URL only after connection resolution fails.
+- Ask for URL only after command output shows unresolved connection.
+- Prefer env-based password with `--password-env CALIBRE_PASSWORD`; username auto-loads from env, or override with `--username`.
+
+Requirements: `calibredb`, `node`, `subagent-spawn-command-builder`; `pdffonts` optional/recommended for PDF evidence checks.
 
 ## Commands
 
@@ -57,9 +78,13 @@ Dry-run:
 Apply:
     cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs --password-env CALIBRE_PASSWORD --lang ja --apply
 
-Use wrapper scripts, not direct calibredb, for chat/agent edits.
+Run state:
+    node skills/calibre-metadata-apply/scripts/run_state.mjs upsert --run-id <RUN_ID> --task <TASK> --state running
+    node skills/calibre-metadata-apply/scripts/handle_completion.mjs --run-id <RUN_ID> --result-json /tmp/result.json
 
-## Unknown-document recovery
+## Unknown-Document Recovery
+
+Use when title/author/series are missing or unreliable.
 
 Default stage is light pass:
 1. Analyze existing metadata only.
@@ -71,15 +96,43 @@ On request:
 - Deep pass: first 5 + last 5 pages and web evidence.
 - Apply gate: explicit approval before writes.
 
-Use pending-review tag for unresolved items; do not guess.
+Proposal synthesis:
+- Collect evidence from file extraction and web sources when metadata is missing.
+- Show one merged proposal table with id, current fields, candidate fields, source, confidence high|medium|low, and sort candidates.
+- Apply only approved/finalized fields.
+- If confidence is low or sources conflict, keep fields empty.
+- Use pending-review tag for unresolved/hold items; do not force guesses.
 
-## Heavy analysis
+Required report shape for batch recovery:
+- execution summary with target/changed/pending/skipped/error.
+- full changed list with `id` and key before/after fields.
+- full pending list with `id` and reason.
+- full error list with `id` and error summary.
 
-Use subagent-spawn-command-builder for heavy proposal generation, profile calibre-meta.
-Main session owns decisions, dry-run, apply, and final report.
+## Extraction And Sort
 
-For library-wide heavy processing, split turns:
-- Turn 1: define scope, spawn subagent, save state/runs.json, reply started.
-- Turn 2: handle completion through scripts and show proposal/apply result.
+- Try `ebook-convert` first.
+- If empty/failed, fallback to `pdftotext`.
+- If both fail, switch to web-evidence-first mode.
+- Use TOOLS.md Calibre `reading_script` for Japanese/non-Latin sort fields.
+- Default policy is full reading, no truncation.
+- Ask once on first use only when TOOLS.md lacks the configured reading script.
+
+## Heavy Analysis
+
+Use `subagent-spawn-command-builder` for heavy proposal generation, profile `calibre-meta`. Main session owns final decisions, dry-run, apply, and final report.
+
+Long-run turn split:
+1. Main defines scope.
+2. Main generates spawn payload via `subagent-spawn-command-builder`, then calls `sessions_spawn`.
+3. Save `run_id/session_key/task` via `scripts/run_state.mjs upsert`.
+4. Tell the user this is a subagent job and keep normal chat responsive.
+5. On completion, save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
+6. Return summarized proposal or apply result only after the gate is satisfied.
+
+Data flow:
+- Local execution reads Calibre metadata/files and writes Calibre metadata only after approval.
+- Optional subagent execution may receive extracted source/evidence for heavy candidate generation.
+- If user does not want external model/subagent processing, keep flow local and skip subagent orchestration.
 
 Detailed legacy notes and command variants: references/full-pre-prune-2026-05-27.md.

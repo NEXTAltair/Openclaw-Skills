@@ -11,44 +11,67 @@ Use for continuity work, not vague acknowledgement. Default to the smallest conc
 ## Entrypoints
 
 Heartbeat/current-state maintenance:
-1. Read memory/now-state.json and memory/heartbeat-state.json if present.
+1. Read `memory/now-state.json` and `memory/heartbeat-state.json` if present.
 2. Interpret current state from recent work.
-3. Write a state snapshot with scripts/emostate_tick.js when meaningful.
-4. Update memory/now-state.json mirror with mood, intent, stress, updated_at, source, note.
+3. Write a state snapshot with `scripts/emostate_tick.js` when meaningful.
+4. Update `memory/now-state.json` mirror with mood, intent, stress, updated_at, source, note.
 5. If heartbeat asks for evolution note, append a short daily note after the state write.
 
 Mood/check-in:
-- Read memory/now-state.json first.
-- If stale/thin, recall recent state or write a light tick.
-- Answer in 1-3 concrete sentences.
+- Read `memory/now-state.json` first.
+- If stale/thin, recall recent Notion-backed state/journal via this skill before answering.
+- Answer in 1-3 concrete sentences; describe present state and one concrete reason, not generic status.
 
 Durable memory:
 - Distill one high-signal item.
-- Write with scripts/ltm_write.js.
-- Use type decision|preference|fact|procedure|todo|gotcha.
-
-User profile promotion:
-- Update USER.md proactively only when the new fact is durable, reusable, safe, and improves future replies.
-- Put uncertain items in daily memory instead.
+- Write with `scripts/ltm_write.js`.
+- Use type `decision|preference|fact|procedure|todo|gotcha`.
 
 Journal:
-- Use scripts/journal_write.js for daily synthesis, not raw log dumping.
+- Use `scripts/journal_write.js` for daily synthesis, not raw log dumping.
+- Gather day-level worklog, emotional tone, unresolved tensions, and future intent.
+- Add 1-2 world/news items only when the caller requested them or cron requires them.
 
 Identity/continuity:
 - Recall relevant state/memory.
-- Use continuity_check.js or identity_diff.js before self-description edits.
-- Use conflict_track.js for unresolved tension instead of premature edits.
+- Use `continuity_check.js` or `identity_diff.js` before self-description edits.
+- Use `conflict_track.js` for unresolved tension instead of premature edits.
 
-## Failure rules
+## User Profile Promotion
+
+Update `USER.md` proactively only when a new fact is durable, reusable, safe, and improves future replies.
+
+Good candidates:
+- language preference.
+- preferred address/call style.
+- tone/style preferences.
+- recurring dislikes or pet peeves in replies.
+- durable workflow preferences.
+- stable decision rules the user repeatedly expresses.
+
+Do not promote:
+- one-off task instructions.
+- temporary mood/state.
+- ephemeral plans.
+- raw private facts with no conversational value.
+- secrets, credentials, financial data, intimate personal data, or anything the user would reasonably expect not to be crystallized into a profile file.
+
+If uncertain, write to daily memory first. Current user message overrides `USER.md`; `USER.md` stores defaults, not hard constraints.
+
+## Failure Rules
 
 - Notion write failure is real; do not pretend local mirrors are durable memory.
-- For heartbeat/state maintenance, update memory/now-state.json even if Notion fails, and report the durable-write failure when relevant.
+- Local files (`memory/*.md`, `memory/now-state.json`) are mirrors and fallbacks, not substitutes for a requested durable Notion write.
+- If caller explicitly asks for local-only behavior, say so and keep the write local.
+- For heartbeat/state maintenance, update `memory/now-state.json` even if Notion fails, and report durable-write failure when relevant.
 - Keep writes high-signal; avoid dumping full chats.
+- If heartbeat is comment-only, emotion tick may be skipped.
+- `emostate_tick.js` rejects empty or semantically empty payloads; pass a real payload file/json.
+- For subagent spawn planning, use `subagent-spawn-command-builder` with TOOLS.md profile defaults.
 
 ## Database IDs
 
-Read TOOLS.md section Soul-in-Sapphire Notion Databases and pass explicit IDs to scripts.
-Notion API version: 2025-09-03.
+Read TOOLS.md section Soul-in-Sapphire Notion Databases and pass explicit IDs to scripts. Notion API version: 2025-09-03.
 
 ## Commands
 
@@ -64,10 +87,20 @@ Emotion/state tick:
 Journal:
     echo '{"body":"...","source":"manual"}' | node skills/soul-in-sapphire/scripts/journal_write.js --journal-dbid <JOURNAL_DB_ID> --journal-dsid <JOURNAL_DS_ID>
 
-Continuity helpers are local analysis tools and do not require Notion writes:
-- continuity_check.js
-- identity_diff.js
-- conflict_track.js
-- state_recall.js
+Continuity helpers:
+- `state_recall.js`: pull recent state snapshots.
+- `continuity_check.js`: distinguish stable traits from temporary drift.
+- `identity_diff.js`: compare current vs proposed identity text.
+- `conflict_track.js`: log unresolved tension before changing identity.
+
+## Continuity Workflow
+
+- Use `emostate_tick.js` when a real event changes mood, intent, stress, or need.
+- Use `journal_write.js` when the day needs synthesis, not just logging.
+- Search durable memory with `ltm_search.js` before guessing past decisions.
+- Draft proposed identity/profile text separately before editing core files.
+- Prefer `identity_diff.js` before any self-description update so the change stays inspectable.
+
+Evolution triggers worth tracking: repeated mood/intent patterns, stable preferences across sessions, recurring internal conflicts, and identity claims that survive comparison against recent memory.
 
 Detailed schema and legacy notes: references/full-pre-prune-2026-05-27.md.
