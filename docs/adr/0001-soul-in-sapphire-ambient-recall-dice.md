@@ -216,7 +216,7 @@ Dream は `soul-in-sapphire` 独自ファイルではなく、OpenClaw の memor
   "shelf": "dream",
   "staged_at": "2026-06-05T12:00:00.000Z",
   "expires_at": "2026-06-05T14:00:00.000Z",
-  "roll": 4,
+  "roll": 6,
   "title": "OpenClaw SecretRef auth migration",
   "content": "Security/auth changes around moving plaintext secrets into SecretRef remain worth keeping in working context.",
   "source": {
