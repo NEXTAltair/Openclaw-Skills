@@ -1,7 +1,7 @@
 # ADR 0001: Soul in Sapphire の ambient recall dice と workspace staging
 
 - **日付**: 2026-06-05
-- **ステータス**: Proposed
+- **ステータス**: Accepted
 - **対象**: `soul-in-sapphire` skill、recall scripts、OpenClaw workspace memory、cron integration
 - **関連 Issue / PR**: #7
 

@@ -4,7 +4,7 @@ Openclaw-Skills の重要な設計判断を記録するドキュメント群。
 
 | ADR | タイトル | 日付 | ステータス |
 |-----|---------|------|-----------|
-| [0001](0001-soul-in-sapphire-ambient-recall-dice.md) | Soul in Sapphire の ambient recall dice と workspace staging | 2026-06-05 | Proposed |
+| [0001](0001-soul-in-sapphire-ambient-recall-dice.md) | Soul in Sapphire の ambient recall dice と workspace staging | 2026-06-05 | Accepted |
 
 ## ADR テンプレート
 

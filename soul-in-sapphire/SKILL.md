@@ -16,6 +16,7 @@ Heartbeat/current-state maintenance:
 3. Write a state snapshot with `scripts/emostate_tick.js` when meaningful.
 4. Update `memory/now-state.json` mirror with mood, intent, stress, updated_at, source, note.
 5. If heartbeat asks for evolution note, append a short daily note after the state write.
+6. If `memory/soul-in-sapphire/ambient-recall.json` exists in the agent workspace and is not expired, read it as quiet context only. Do not reroll here and do not announce it unless it naturally matters.
 
 Mood/check-in:
 - Read `memory/now-state.json` first.
@@ -109,8 +110,12 @@ Emotion/state tick:
 Journal:
     echo '{"body":"...","source":"manual"}' | node skills/soul-in-sapphire/scripts/journal_write.js --journal-dbid <JOURNAL_DB_ID> --journal-dsid <JOURNAL_DS_ID>
 
+Ambient recall stage:
+    node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --workspace <OPENCLAW_WORKSPACE> --state-dsid <STATE_DS_ID> --journal-dsid <JOURNAL_DS_ID> --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID>
+
 Continuity helpers:
 - `state_recall.js`: pull recent state snapshots.
+- `stage_ambient_recall.js`: cron-side ambient recall dice and workspace staging.
 - `continuity_check.js`: distinguish stable traits from temporary drift.
 - `identity_diff.js`: compare current vs proposed identity text.
 - `conflict_track.js`: log unresolved tension before changing identity.
@@ -120,6 +125,7 @@ Continuity helpers:
 - Use `emostate_tick.js` when a real event changes mood, intent, stress, or need.
 - Use `journal_write.js` when the day needs synthesis, not just logging.
 - Search durable memory with `ltm_search.js` before guessing past decisions.
+- Treat ambient recall as internal context injection, not a user-visible recall log. The script stages at most one short item under workspace `memory/soul-in-sapphire/`; conversation and heartbeat paths only read unexpired staged recall and never reroll.
 - Draft proposed identity/profile text separately before editing core files.
 - Prefer `identity_diff.js` before any self-description update so the change stays inspectable.
 

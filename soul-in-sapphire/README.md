@@ -258,10 +258,68 @@ echo '{
 }' | node skills/soul-in-sapphire/scripts/journal_write.js
 ```
 
+### Ambient recall: サイコロで1件stageする
+
+`stage_ambient_recall.js` は cron/script 側でだけサイコロを振り、当たった場合に agent workspace の memory 配下へ短い recall を最大1件だけstageします。会話側やheartbeat側では reroll せず、TTL内の staged recall があれば静かな作業コンテキストとして読むだけにします。
+
+runtime state は skill repo ではなく agent workspace に置きます。
+
+```text
+<OpenClaw workspace>/
+  memory/
+    soul-in-sapphire/
+      ambient-recall.json
+      ambient-recall-state.json
+```
+
+手動実行例:
+
+```bash
+node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+  --workspace ~/.openclaw/workspace/val \
+  --ttl-minutes 120 \
+  --daily-cap 10
+```
+
+Notion-backed shelf も使う場合は、必要な data source / database IDs を渡します。
+
+```bash
+node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+  --workspace ~/.openclaw/workspace/val \
+  --state-dsid <STATE_DS_ID> \
+  --journal-dsid <JOURNAL_DS_ID> \
+  --mem-dsid <MEM_DS_ID> \
+  --mem-dbid <MEM_DB_ID>
+```
+
+OpenClaw cron からは20分ごとに上記scriptを呼ぶ運用を想定しています。SecretRef / env 経由で `NOTION_API_KEY` が注入されていれば、Notionを読む棚も使えます。`--workspace` は対象agent/personaのworkspaceを指してください。
+
+サイコロの初期仕様:
+
+```text
+01-03: recent state / journal
+04: unresolved theme
+05: durable memory random
+06: OpenClaw dream
+07-100: none
+```
+
+Dream shelf は OpenClaw workspace の `DREAMS.md` と `memory/dreaming/{rem,light}` を読むだけです。`openclaw memory promote --apply` などの昇格系CLIは呼びません。
+
+検証用:
+
+```bash
+node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+  --workspace /tmp/sis-ambient-test \
+  --force-roll 6 \
+  --dry-run
+```
+
 ## 自動実行(推奨)
 
 - **01:00 JST**: journalを必ず書く(ニュース1-2件+感想、作業/会話まとめ、未来)
 - **heartbeat**: ファジーに感情が動いた時だけ emostate tick を打つ(通知は必要時のみ)
+- **20分ごと**: `stage_ambient_recall.js` で ambient recall をstageする
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
