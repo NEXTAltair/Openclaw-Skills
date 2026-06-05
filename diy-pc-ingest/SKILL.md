@@ -1,7 +1,7 @@
 ---
 name: diy-pc-ingest
 description: Ingest pasted PC parts purchase/config text (Discord message receipts, bullet lists) into Notion DIY_PC tables (PCConfig, ストレージ, エンクロージャー, PCInput). Use when the user pastes raw purchase logs/spec notes and wants the AI to classify, enrich via web search, ask follow-up questions for unknowns, and then upsert rows into the correct Notion data sources using the 2025-09-03 data_sources API.
-metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
+metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","NOTIONCTL_PATH"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
 ---
 
 # diy-pc-ingest
@@ -23,10 +23,32 @@ clawhub install notion-api-automation
 - `--enclosure-dsid`, `--enclosure-dbid`
 
 2) Provide Notion auth for `notion-api-automation` (`notionctl`):
-- env: `NOTION_API_KEY` (recommended)
+- env: `NOTION_API_KEY` (legacy shell/service env remains supported)
+- OpenClaw config: `skills.entries["diy-pc-ingest"].apiKey`
+
+`apiKey` is associated with `metadata.openclaw.primaryEnv` and is injected as
+`NOTION_API_KEY` for the host agent run. It may be a plaintext value or any
+OpenClaw SecretRef supported by the local gateway (`env`, `file`, `exec`, etc.).
+Do not hardcode provider-specific secret paths in this shared skill.
+
+Example SecretRef shape:
+
+```json5
+{
+  skills: {
+    entries: {
+      "diy-pc-ingest": {
+        apiKey: { source: "exec", provider: "your_notion_secret_provider", id: "value" }
+      }
+    }
+  }
+}
+```
 
 Notes:
 - This skill uses Notion-Version `2025-09-03` by default.
+- If `NOTIONCTL_PATH` is set, `scripts/notion_apply_records.js` uses that
+  notionctl path; otherwise it uses the sibling `notion-api-automation` skill.
 
 ## Data flow disclosure
 

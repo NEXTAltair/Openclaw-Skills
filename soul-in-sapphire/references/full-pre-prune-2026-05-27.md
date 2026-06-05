@@ -1,7 +1,7 @@
 ---
 name: soul-in-sapphire
 description: Long-term memory, state tracking, continuity review, and identity-change support for OpenClaw. Use for durable memory writes/search in Notion, emotion/state ticks, journal writes, continuity checks, identity diffs, inner-conflict tracking, and preserving a stable sense of self across sessions.
-metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTIONCTL_PATH"]}}
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH"]}}
 ---
 
 # soul-in-sapphire (Notion LTM + continuity)
@@ -37,7 +37,10 @@ Install the required dependency skill via ClawHub before using this skill:
 clawhub install notion-api-automation
 ```
 
-- Notion token: `NOTION_API_KEY` (or `NOTION_TOKEN`)
+- Notion token: `NOTION_API_KEY` (or `NOTION_TOKEN` / `NOTION_API_TOKEN`)
+- OpenClaw config may also provide `skills.entries["soul-in-sapphire"].apiKey`.
+  This is injected as `NOTION_API_KEY` through `metadata.openclaw.primaryEnv`
+  and may use any local SecretRef provider (`env`, `file`, `exec`, etc.).
 - Notion API version: `2025-09-03`
 - Dependency skill: `notion-api-automation` (`scripts/notionctl.mjs` is executed via local child process)
 - Optional override: `NOTIONCTL_PATH` (if set, uses explicit notionctl path instead of default sibling skill path)
