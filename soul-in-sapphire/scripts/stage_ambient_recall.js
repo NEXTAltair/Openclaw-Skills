@@ -339,10 +339,10 @@ function readRecent(args) {
   return readLatestDailyMemory(args.workspace);
 }
 
-function readDurable(args) {
+async function readDurable(args) {
   const cfg = { data_source_id: args.memDsid, database_id: args.memDbid };
   requireIds(cfg);
-  const res = queryDataSource(args.memDsid, {
+  const res = await queryDataSource(args.memDsid, {
     page_size: 25,
     sorts: [{ timestamp: 'created_time', direction: 'descending' }],
   });
@@ -357,10 +357,10 @@ function readDurable(args) {
   });
 }
 
-function readShelf(shelf, args) {
+async function readShelf(shelf, args) {
   if (shelf === 'recent') return readRecent(args);
   if (shelf === 'unresolved') return readUnresolved(args.workspace);
-  if (shelf === 'durable') return readDurable(args);
+  if (shelf === 'durable') return await readDurable(args);
   if (shelf === 'dream') return readDream(args.workspace);
   return null;
 }
@@ -395,7 +395,7 @@ function cleanExpired(stagedFile) {
   return false;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv);
   const stateFile = path.join(args.stateDir, 'ambient-recall-state.json');
   const stagedFile = path.join(args.stateDir, 'ambient-recall.json');
@@ -417,7 +417,7 @@ function main() {
     if (state.hitsToday >= args.dailyCap && shelf) {
       state.lastError = `dailyCap reached (${args.dailyCap}); skipped ${shelf}`;
     } else if (shelf) {
-      const c = readShelf(shelf, args);
+      const c = await readShelf(shelf, args);
       if (c) {
         staged = buildStaged(c, shelf, roll, args, at);
         state.hitsToday = Number(state.hitsToday || 0) + 1;
@@ -453,7 +453,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (err) {
   console.error(String(err?.stack || err));
   process.exit(1);
