@@ -6,7 +6,7 @@ Discordなどに貼り付けたPCパーツ購入ログ/メモを、OpenClaw経�
 - 迷うところは止めて質問、確実なところは即時反映
 - Notion APIは **2025-09-03**(data_sources世代)前提
 
-> このリポジトリには個人のNotion IDやAPIキーは含めません。各自の環境のに設定してください。
+> このリポジトリには個人のNotion IDやAPIキーは含めません。各自の環境に設定してください。
 
 ---
 
@@ -134,13 +134,29 @@ clawhub install notion-api-automation
 
 ### 2) トークン(APIキー)を用意
 
-環境変数で渡す
+従来どおり環境変数で渡せます。
 
 ```bash
 export NOTION_API_KEY="<your notion token>"
 ```
 
-OpenClawでは `~/.openclaw/.env` に書いて起動時に環境変数として読ませる
+OpenClawでは `skills.entries["diy-pc-ingest"].apiKey` に設定する方法も使えます。
+`apiKey` はこのskillの `primaryEnv` である `NOTION_API_KEY` として実行時に注入されます。
+SecretRef provider はユーザー環境ごとに異なるため、このskillには特定のvault/item/pathを固定しません。
+
+```json5
+{
+  skills: {
+    entries: {
+      "diy-pc-ingest": {
+        apiKey: { source: "exec", provider: "your_notion_secret_provider", id: "value" }
+      }
+    }
+  }
+}
+```
+
+`source` は `env` / `file` / `exec` など、OpenClaw Gatewayで設定済みのSecretRef providerに合わせてください。
 
 ### 3) NotionのIDを自動検出して設定(推奨)
 
@@ -150,7 +166,7 @@ Notionの `data_source_id` / `database_id` は、Integrationがアクセスで�
 ```bash
 cd skills/diy-pc-ingest
 
-# NOTION_API_KEY を設定した状態で実行
+# NOTION_API_KEY env、またはOpenClaw apiKey SecretRef注入が有効な状態で実行
 node scripts/bootstrap_config.js
 ```
 

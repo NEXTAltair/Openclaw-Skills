@@ -1,7 +1,7 @@
 ---
 name: soul-in-sapphire
 description: "Continuity, durable memory, state tracking, journal writes, identity diffs, and mood/current-state checks for Valentina/OpenClaw. Use for memory writes/search, emotion/state ticks, heartbeat state upkeep, journal synthesis, and preserving self-state across sessions."
-metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTIONCTL_PATH"]}}
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH"]}}
 ---
 
 # soul-in-sapphire
@@ -72,6 +72,28 @@ If uncertain, write to daily memory first. Current user message overrides `USER.
 ## Database IDs
 
 Read TOOLS.md section Soul-in-Sapphire Notion Databases and pass explicit IDs to scripts. Notion API version: 2025-09-03.
+
+## Notion Auth
+
+Provide Notion auth through `NOTION_API_KEY` / `NOTION_TOKEN`, or configure
+`skills.entries["soul-in-sapphire"].apiKey` in OpenClaw. The `apiKey` field is
+associated with this skill's `primaryEnv` and is injected as `NOTION_API_KEY`
+for the host agent run. It may be a plaintext value or any OpenClaw SecretRef
+supported by the local gateway (`env`, `file`, `exec`, etc.).
+
+Do not hardcode provider-specific secret paths in this shared skill. Example:
+
+```json5
+{
+  skills: {
+    entries: {
+      "soul-in-sapphire": {
+        apiKey: { source: "exec", provider: "your_notion_secret_provider", id: "value" }
+      }
+    }
+  }
+}
+```
 
 ## Commands
 

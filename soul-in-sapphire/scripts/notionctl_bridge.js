@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const NOTION_AUTH_ENV_KEYS = ['NOTION_API_KEY', 'NOTION_TOKEN', 'NOTION_API_TOKEN'];
+
 function expandHome(p) {
   if (!p) return p;
   if (p === '~') return os.homedir();
@@ -39,6 +41,24 @@ function apiCompatibilityHint(rawText) {
   return 'Installed notionctl does not support "api". Update skills/notion-api-automation/scripts/notionctl.mjs or set NOTIONCTL_PATH to a compatible notionctl.';
 }
 
+function authSetupHint() {
+  return [
+    'Configure Notion auth with NOTION_API_KEY/NOTION_TOKEN,',
+    'or set skills.entries["soul-in-sapphire"].apiKey to an OpenClaw SecretRef.',
+    'The SecretRef provider can be env, file, exec, or another OpenClaw-supported secure provider.',
+  ].join(' ');
+}
+
+function redactKnownSecrets(text) {
+  let out = String(text || '');
+  for (const k of NOTION_AUTH_ENV_KEYS) {
+    const value = process.env[k];
+    if (!value) continue;
+    out = out.split(String(value)).join(`[redacted:${k}]`);
+  }
+  return out;
+}
+
 function extractExecFailure(err) {
   const stdout = err?.stdout ? String(err.stdout).trim() : '';
   const stderr = err?.stderr ? String(err.stderr).trim() : '';
@@ -65,7 +85,7 @@ function runApi(method, apiPath, body = null) {
     const combined = [info.stdout, info.stderr, info.msg].filter(Boolean).join('\n');
     const compat = apiCompatibilityHint(combined);
     if (compat) throw new Error(compat);
-    throw new Error(`notionctl api execution failed: ${combined || 'unknown error'}`);
+    throw new Error(`notionctl api execution failed. ${authSetupHint()}\n${redactKnownSecrets(combined || 'unknown error')}`);
   }
 
   const obj = parseNotionctlJson(out);
@@ -75,7 +95,7 @@ function runApi(method, apiPath, body = null) {
   if (!obj.ok) {
     const compat = apiCompatibilityHint(out);
     if (compat) throw new Error(compat);
-    throw new Error(`notionctl api not ok: ${out}`);
+    throw new Error(`notionctl api not ok. ${authSetupHint()}\n${redactKnownSecrets(out)}`);
   }
   return obj.result || {};
 }

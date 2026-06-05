@@ -161,13 +161,29 @@ pnpm dlx clawhub@latest install notion-api-automation
 3. 親ページ(例: OpenClawページ)をIntegrationに共有(Connect to)
 
 ### 2) APIキー
-推奨: 環境変数
+従来どおり環境変数で渡せます。
 
 ```bash
 export NOTION_API_KEY="..."
 ```
 
-(OpenClaw運用なら `~/.openclaw/.env` に `NOTION_API_KEY=...`)
+OpenClaw運用では `skills.entries["soul-in-sapphire"].apiKey` も使えます。
+`apiKey` はこのskillの `primaryEnv` である `NOTION_API_KEY` として実行時に注入されます。
+SecretRef provider はユーザー環境ごとに異なるため、このskillには特定のvault/item/pathを固定しません。
+
+```json5
+{
+  skills: {
+    entries: {
+      "soul-in-sapphire": {
+        apiKey: { source: "exec", provider: "your_notion_secret_provider", id: "value" }
+      }
+    }
+  }
+}
+```
+
+`source` は `env` / `file` / `exec` など、OpenClaw Gatewayで設定済みのSecretRef providerに合わせてください。
 
 ### 3) DB作成 + config生成
 
