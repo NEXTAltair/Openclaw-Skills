@@ -9,6 +9,7 @@ import { queryDataSource, queryRecent, requireIds, textOf } from './notionctl_br
 const DEFAULT_STATE_DIR = 'memory/soul-in-sapphire';
 const DEFAULT_TTL_MINUTES = 120;
 const DEFAULT_DAILY_CAP = 10;
+const DEFAULT_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 const TITLE_LIMIT = 80;
 const CONTENT_LIMIT = 800;
 const MARKERS = ['unresolved', 'todo', 'tension'];
@@ -17,8 +18,41 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function todayUtc() {
-  return new Date().toISOString().slice(0, 10);
+function usage() {
+  return `Usage:
+  node skills/soul-in-sapphire/scripts/stage_ambient_recall.js [options]
+
+Options:
+  --workspace <path>       OpenClaw agent workspace. Defaults to OPENCLAW_WORKSPACE or cwd.
+  --state-dir <path>       State directory. Relative paths are under workspace.
+                           Defaults to SIS_AMBIENT_STATE_DIR or memory/soul-in-sapphire.
+  --timezone <iana_tz>     Day boundary for rollsToday/hitsToday.
+                           Defaults to SIS_AMBIENT_TIMEZONE or the local runtime timezone.
+  --ttl-minutes <n>        Staged recall TTL. Default: 120.
+  --daily-cap <n>          Max hit/stage attempts per day. Default: 10.
+  --state-dsid <id>        Notion state data source id for recent shelf.
+  --journal-dsid <id>      Notion journal data source id for recent shelf.
+  --mem-dsid <id>          Notion memory data source id for durable shelf.
+  --mem-dbid <id>          Notion memory database id for durable shelf.
+  --force-roll <1-100>     Force a deterministic roll for verification.
+  --dry-run                Do not write state or staged recall files.
+  --help, -h               Show this help and exit without rolling.
+`;
+}
+
+function todayInTimeZone(timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    return `${values.year}-${values.month}-${values.day}`;
+  } catch (err) {
+    throw new Error(`Invalid --timezone value: ${timeZone}`);
+  }
 }
 
 function expandHome(p) {
@@ -45,11 +79,15 @@ function parseArgs(argv) {
     memDbid: '',
     forceRoll: null,
     dryRun: false,
+    timezone: process.env.SIS_AMBIENT_TIMEZONE || DEFAULT_TIMEZONE,
+    help: false,
   };
 
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (a === '--workspace') out.workspace = argv[++i] || out.workspace;
+    if (a === '--help' || a === '-h') out.help = true;
+    else if (a === '--timezone') out.timezone = argv[++i] || out.timezone;
+    else if (a === '--workspace') out.workspace = argv[++i] || out.workspace;
     else if (a === '--state-dir') out.stateDir = argv[++i] || out.stateDir;
     else if (a === '--ttl-minutes') out.ttlMinutes = parseNumber(argv[++i], out.ttlMinutes);
     else if (a === '--daily-cap') out.dailyCap = parseNumber(argv[++i], out.dailyCap);
@@ -90,8 +128,8 @@ function readJsonFile(file) {
   return JSON.parse(fs.readFileSync(file, 'utf-8'));
 }
 
-function loadState(file, dailyCap) {
-  const date = todayUtc();
+function loadState(file, dailyCap, timeZone) {
+  const date = todayInTimeZone(timeZone);
   let state = defaultState(date, dailyCap);
   let loadError = null;
   if (fs.existsSync(file)) {
@@ -397,10 +435,14 @@ function cleanExpired(stagedFile) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  if (args.help) {
+    process.stdout.write(usage());
+    return;
+  }
   const stateFile = path.join(args.stateDir, 'ambient-recall-state.json');
   const stagedFile = path.join(args.stateDir, 'ambient-recall.json');
   const at = nowIso();
-  let state = loadState(stateFile, args.dailyCap);
+  let state = loadState(stateFile, args.dailyCap, args.timezone);
   const loadError = state._loadError;
   delete state._loadError;
   const roll = args.forceRoll ?? randomRoll();
@@ -447,6 +489,7 @@ async function main() {
     cleanedExpired,
     stateFile,
     stagedFile,
+    timezone: args.timezone,
     lastError: state.lastError,
     recall: staged,
   }, null, 2));

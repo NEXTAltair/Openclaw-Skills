@@ -111,7 +111,7 @@ Journal:
     echo '{"body":"...","source":"manual"}' | node skills/soul-in-sapphire/scripts/journal_write.js --journal-dbid <JOURNAL_DB_ID> --journal-dsid <JOURNAL_DS_ID>
 
 Ambient recall stage:
-    node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --workspace <OPENCLAW_WORKSPACE> --state-dsid <STATE_DS_ID> --journal-dsid <JOURNAL_DS_ID> --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID>
+    node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --workspace <OPENCLAW_WORKSPACE> --timezone <IANA_TIMEZONE> --state-dsid <STATE_DS_ID> --journal-dsid <JOURNAL_DS_ID> --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID>
 
 Continuity helpers:
 - `state_recall.js`: pull recent state snapshots.

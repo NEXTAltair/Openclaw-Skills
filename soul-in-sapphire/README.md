@@ -277,6 +277,7 @@ runtime state は skill repo ではなく agent workspace に置きます。
 ```bash
 node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
   --workspace ~/.openclaw/workspace/val \
+  --timezone Asia/Tokyo \
   --ttl-minutes 120 \
   --daily-cap 10
 ```
@@ -286,13 +287,14 @@ Notion-backed shelf も使う場合は、必要な data source / database IDs �
 ```bash
 node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
   --workspace ~/.openclaw/workspace/val \
+  --timezone Asia/Tokyo \
   --state-dsid <STATE_DS_ID> \
   --journal-dsid <JOURNAL_DS_ID> \
   --mem-dsid <MEM_DS_ID> \
   --mem-dbid <MEM_DB_ID>
 ```
 
-OpenClaw cron からは20分ごとに上記scriptを呼ぶ運用を想定しています。SecretRef / env 経由で `NOTION_API_KEY` が注入されていれば、Notionを読む棚も使えます。`--workspace` は対象agent/personaのworkspaceを指してください。
+OpenClaw cron からは20分ごとに上記scriptを呼ぶ運用を想定しています。SecretRef / env 経由で `NOTION_API_KEY` が注入されていれば、Notionを読む棚も使えます。`--workspace` は対象agent/personaのworkspaceを指してください。`rollsToday` / `hitsToday` の日付境界は runtime のlocal timezoneを使い、必要に応じて `--timezone` または `SIS_AMBIENT_TIMEZONE` で上書きできます。
 
 サイコロの初期仕様:
 
@@ -313,6 +315,12 @@ node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
   --workspace /tmp/sis-ambient-test \
   --force-roll 6 \
   --dry-run
+```
+
+usage確認:
+
+```bash
+node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --help
 ```
 
 ## 自動実行(推奨)
