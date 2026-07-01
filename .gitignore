@@ -21,6 +21,7 @@ homeassistant-skill/
 self-improvement/
 moltbook-interact/
 skill-vetter/
+oracle/
 
 # 自作・非公開（環境依存が強い）
 lorairo-mem/
