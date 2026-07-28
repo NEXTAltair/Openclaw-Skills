@@ -9,9 +9,10 @@
 - diy-pc-ingest
 - soul-in-sapphire
 - rr-renamer
-- subagent-spawn-command-builder
 
 ## Notes
 
 - Skills installed from ClawHub are excluded via `.gitignore`.
 - Runtime state files (e.g. per-skill `state/runs.json`) are not tracked.
+- Delegate heavy work by calling OpenClaw `sessions_spawn` directly. Do not add
+  shared spawn-payload builder skills.

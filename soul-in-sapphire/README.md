@@ -43,7 +43,6 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 - OpenClaw Gateway
 - Notion Integration + token
 - Notion操作用スキル(ClawHub): `notion-api-automation`
-- subagent payload生成スキル(ClawHub): `subagent-spawn-command-builder`
 
 インストール例:
 
@@ -52,9 +51,6 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 npx clawhub@latest install notion-api-automation
 pnpm dlx clawhub@latest install notion-api-automation
 
-# subagent-spawn-command-builder
-npx clawhub@latest install subagent-spawn-command-builder
-pnpm dlx clawhub@latest install subagent-spawn-command-builder
 ```
 
 ## セットアップ
@@ -331,37 +327,16 @@ node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --help
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 
-## Subagentモデル指定(共通builderスキル運用)
+## Subagent delegation
 
-このスキルでは、subagent用payloadの生成を
-`subagent-spawn-command-builder` に委譲します。
+通常のmemory/state処理はmainで実行します。大量のjournal材料整理など、
+独立した重処理だけをsubagentへ委譲してください。
 
-### 1) テンプレートをコピー
-
-- テンプレート: `skills/subagent-spawn-command-builder/state/spawn-profiles.template.json`
-- 実運用ファイル: `skills/subagent-spawn-command-builder/state/spawn-profiles.json`
-
-```bash
-cp skills/subagent-spawn-command-builder/state/spawn-profiles.template.json \
-   skills/subagent-spawn-command-builder/state/spawn-profiles.json
-```
-
-### 2) モデル/think/timeoutを設定
-
-`spawn-profiles.json` の `profiles.heartbeat` / `profiles.journal` を編集して使うモデルを設定します。
-
-### 3) builderスキルで `sessions_spawn` payloadを生成
-
-- `subagent-spawn-command-builder` を呼び出す
-- `profile=heartbeat` を指定
-- `task` に「直近の感情変化を評価して必要ならemostateを1件記録」を渡す
-
-出力はそのまま `sessions_spawn` に渡せるJSONです。
-
-### 補足
-
-- 生成ログ: `skills/subagent-spawn-command-builder/state/build-log.jsonl`
-- 設定変更後のGateway再読込が必要な場合は `openclaw gateway restart` を実行してください。
+- model/thinkingのローカル既定値はworkspaceの`TOOLS.md`で管理する。
+- OpenClaw `sessions_spawn`を直接呼ぶ。
+- toolが公開する現在のschemaに従い、別の共通payloadを生成しない。
+- subagentは分析だけを返し、Notion書き込み、core identity編集、
+  ユーザー応答はmainが担当する。
 
 ## ローカル設定
 

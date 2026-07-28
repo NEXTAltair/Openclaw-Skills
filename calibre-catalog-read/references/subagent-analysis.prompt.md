@@ -1,6 +1,8 @@
 # Subagent Prompt Template (Model-Agnostic)
 
-Use this template with `sessions_spawn` for analysis-only tasks.
+Use this template as the task body for OpenClaw `sessions_spawn`. OpenClaw
+chooses the model, thinking level, lifecycle, and completion routing; those
+settings are not part of this prompt.
 
 ## Inputs
 - `book_id`: integer
@@ -33,28 +35,17 @@ Quality constraints:
 - Tags: useful for retrieval and review.
 
 
-## Runtime knobs (provided by user)
-- model: <user-selected lightweight model id>
-- thinking: <low|medium|high>
-- runTimeoutSeconds: <integer seconds>
-
-Do not invent these values. Confirm once at session start and reuse unless user requests a change.
-
-
-## Runtime command rule
-
-- If you need to execute Python scripts, always use `uv run python`.
-
 ## Strict read contract (hard requirement)
 
-- Never call `read` without `path`.
-- Always call `read` with this exact shape: `{"path":"<absolute-or-workspace-relative-file>"}`.
-- First read: `subagent_input.json` using `{"path":".../subagent_input.json"}`.
-- Parse `source_files` from that JSON.
-- Then read each source file exactly once, in listed order, using only `{"path":"<file>"}`.
-- Do not use `file_path`.
-- Do not use offset/limit pagination for this workflow.
-- If any read fails or path is unknown, stop and return schema-valid JSON with `analysis-error` tag instead of free text.
+- Treat `subagent_input.json` and its `source_files` array as the complete input
+  set.
+- Read every listed source file in order and exactly once.
+- Do not discover additional files, browse the web, or mutate local/remote
+  state.
+- Use the file-reading interface available to the spawned OpenClaw subagent;
+  do not hardcode a provider-specific argument shape.
+- If any file cannot be read, stop and return schema-valid JSON with an
+  `analysis-error` tag instead of free text.
 
 ## Output discipline
 

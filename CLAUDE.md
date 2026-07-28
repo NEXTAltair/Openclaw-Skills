@@ -12,7 +12,6 @@ This is a custom **OpenClaw skills repository** containing self-contained agent 
 - `diy-pc-ingest` — Parse PC part receipts/specs and upsert into Notion
 - `soul-in-sapphire` — Long-term memory, state tracking, and continuity via Notion
 - `rr-renamer` — Windows bulk file renamer (PowerShell, RenameRegex)
-- `subagent-spawn-command-builder` — Build `sessions_spawn` payloads for subagent configs
 
 ## Skill Structure Convention
 
@@ -60,10 +59,13 @@ metadata:
 **Synchronous** — single turn, immediate result (lightweight skills like `homeassistant-skill`)
 
 **Async with state** — heavy skills split into start → subagent → completion:
-1. Main agent validates input, writes `state/runs.json`, spawns subagent
+1. Main agent validates input, writes `state/runs.json`, and calls OpenClaw
+   `sessions_spawn` directly
 2. Subagent does heavy work, updates `state/runs.json`
-3. Main agent polls state and returns results
-Uses `subagent-spawn-command-builder` to build the spawn payload.
+3. Main agent consumes the runtime completion event and returns results
+
+Do not build a shared spawn payload. `sessions_spawn` publishes and validates
+its own current schema.
 
 **Dry-run / Apply gates** — Default is dry-run (no side effects). Apply requires explicit `--apply` flag or user confirmation. All write/delete operations must follow this pattern.
 
@@ -80,8 +82,6 @@ Uses `subagent-spawn-command-builder` to build the spawn payload.
 ## Skill Interdependencies
 
 ```
-calibre-catalog-read  ──depends on──▶  subagent-spawn-command-builder
-calibre-metadata-apply ─depends on──▶  subagent-spawn-command-builder
 diy-pc-ingest          ─depends on──▶  notion-api-automation (ClawHub)
 soul-in-sapphire        ─depends on──▶  notion-api-automation (ClawHub)
 ```

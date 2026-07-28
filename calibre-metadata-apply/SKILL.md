@@ -1,7 +1,7 @@
 ---
-name: calibre-metadata-apply
-description: "Primary skill for Calibre metadata edits over a running Content server. Use only when the user explicitly requests changing/editing/fixing title, authors, series, series_index, tags, publisher, pubdate, languages, comments, or analysis metadata. Never for read-only lookups."
-metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
+name: "calibre-metadata-apply"
+description: "Edit Calibre title, authors, series, tags, dates, comments, and analysis metadata with dry-run/apply gates."
+metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
 # calibre-metadata-apply
@@ -58,7 +58,7 @@ Never:
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth, and reading script.
+Read TOOLS.md for Content server URL, library id, auth, reading script, and optional subagent model defaults.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -68,7 +68,7 @@ Connection bootstrap:
 - Ask for URL only after command output shows unresolved connection.
 - Prefer env-based password with `--password-env CALIBRE_PASSWORD`; username auto-loads from env, or override with `--username`.
 
-Requirements: `calibredb`, `node`, `subagent-spawn-command-builder`; `pdffonts` optional/recommended for PDF evidence checks.
+Requirements: `calibredb` and `node`; `pdffonts` optional/recommended for PDF evidence checks.
 
 ## Commands
 
@@ -79,7 +79,7 @@ Apply:
     cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs --password-env CALIBRE_PASSWORD --lang ja --apply
 
 Run state:
-    node skills/calibre-metadata-apply/scripts/run_state.mjs upsert --run-id <RUN_ID> --task <TASK> --state running
+    node skills/calibre-metadata-apply/scripts/run_state.mjs upsert --run-id <RUN_ID> --session-key <RUNTIME_HANDLE> --task <TASK> --state running
     node skills/calibre-metadata-apply/scripts/handle_completion.mjs --run-id <RUN_ID> --result-json /tmp/result.json
 
 ## Unknown-Document Recovery
@@ -120,19 +120,20 @@ Required report shape for batch recovery:
 
 ## Heavy Analysis
 
-Use `subagent-spawn-command-builder` for heavy proposal generation, profile `calibre-meta`. Main session owns final decisions, dry-run, apply, and final report.
+Use native subagent delegation only for heavy proposal generation. Main owns final decisions, dry-run, apply, and final report.
 
-Long-run turn split:
-1. Main defines scope.
-2. Main generates spawn payload via `subagent-spawn-command-builder`, then calls `sessions_spawn`.
-3. Save `run_id/session_key/task` via `scripts/run_state.mjs upsert`.
-4. Tell the user this is a subagent job and keep normal chat responsive.
-5. On completion, save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
-6. Return summarized proposal or apply result only after the gate is satisfied.
+1. Main defines scope and a self-contained task with required input paths, evidence limits, and output contract.
+2. Call OpenClaw `sessions_spawn` directly with the self-contained task.
+   - Follow the schema exposed by the current tool.
+   - Do not generate or reuse a separate shared spawn payload.
+3. Use model/thinking defaults from TOOLS.md only when an override is needed.
+4. Save `run_id`, the returned OpenClaw session handle, and task via `scripts/run_state.mjs upsert`.
+5. Keep normal chat responsive and consume the OpenClaw completion event; do not busy-poll.
+6. Save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
+7. Return a proposal or apply result only after the existing user gate is satisfied.
 
 Data flow:
 - Local execution reads Calibre metadata/files and writes Calibre metadata only after approval.
 - Optional subagent execution may receive extracted source/evidence for heavy candidate generation.
-- If user does not want external model/subagent processing, keep flow local and skip subagent orchestration.
-
-Detailed legacy notes and command variants: references/full-pre-prune-2026-05-27.md.
+- Subagent must not apply metadata or message the user.
+- If user does not want external model/subagent processing, keep flow local and skip delegation.

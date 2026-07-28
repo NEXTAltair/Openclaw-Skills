@@ -1,6 +1,6 @@
 ---
-name: soul-in-sapphire
-description: "Continuity, durable memory, state tracking, journal writes, identity diffs, and mood/current-state checks for Valentina/OpenClaw. Use for memory writes/search, emotion/state ticks, heartbeat state upkeep, journal synthesis, and preserving self-state across sessions."
+name: "soul-in-sapphire"
+description: "Continuity, durable memory, mood/state, journal, identity diff, heartbeat state, and profile promotion for Valentina/OpenClaw."
 metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH"]}}
 ---
 
@@ -68,7 +68,16 @@ If uncertain, write to daily memory first. Current user message overrides `USER.
 - Keep writes high-signal; avoid dumping full chats.
 - If heartbeat is comment-only, emotion tick may be skipped.
 - `emostate_tick.js` rejects empty or semantically empty payloads; pass a real payload file/json.
-- For subagent spawn planning, use `subagent-spawn-command-builder` with TOOLS.md profile defaults.
+
+## Subagent Delegation
+
+Most continuity work stays in main. Delegate only independent heavy analysis such as sorting a large journal corpus.
+
+- Call OpenClaw `sessions_spawn` directly.
+- Follow the schema exposed by the current tool.
+- Do not generate or reuse a separate shared spawn payload.
+- Read model/thinking defaults from TOOLS.md only when an override is needed.
+- Subagent returns analysis only. Main owns Notion writes, core identity edits, memory promotion, and user-facing replies.
 
 ## Database IDs
 
@@ -130,5 +139,3 @@ Continuity helpers:
 - Prefer `identity_diff.js` before any self-description update so the change stays inspectable.
 
 Evolution triggers worth tracking: repeated mood/intent patterns, stable preferences across sessions, recurring internal conflicts, and identity claims that survive comparison against recent memory.
-
-Detailed schema and legacy notes: references/full-pre-prune-2026-05-27.md.

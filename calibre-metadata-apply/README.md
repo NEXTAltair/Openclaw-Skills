@@ -45,16 +45,9 @@
 1. このスキルを実行する環境にCalibreをインストールする
    - 必須: `calibredb`
 2. PDF調査用に `pdffonts` を使えるようにする（例: `poppler-utils`）
-3. `subagent-spawn-command-builder` を導入する（spawn payload生成に使用）
-
-```bash
-npx clawhub@latest install subagent-spawn-command-builder
-pnpm dlx clawhub@latest install subagent-spawn-command-builder
-```
-
-4. `calibredb` と `pdffonts` が `PATH` で実行できることを確認する
-5. Calibre Content server に到達できることを確認する
-6. `--with-library` は次の形式で指定する
+3. `calibredb` と `pdffonts` が `PATH` で実行できることを確認する
+4. Calibre Content server に到達できることを確認する
+5. `--with-library` は次の形式で指定する
    - `http://HOST:PORT/#LIBRARY_ID`
    - localhost前提にしない（明示的なHOST:PORTを使う）
    - 省略する場合は以下のどれかを事前設定する
@@ -66,11 +59,11 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
      - WSLでは `/etc/resolv.conf` の `nameserver` も自動候補に追加
    - `LIBRARY_ID` が不明な場合は `#-` で一覧確認できる
      - 例: `calibredb list --with-library "http://HOST:PORT/#-" --username ... --password ...`
-7. 認証が有効な場合は次を指定する
+6. 認証が有効な場合は次を指定する
    - `--username <user>`
    - `--password-env <ENV_VAR>` または `--password <plain>`
    - 認証方式は非SSL運用前提でDigest固定(自動)とし、`--auth-mode` / `--auth-scheme` は使わない
-8. 認証情報を保存して再利用したい場合は `--save-auth` を使う
+7. 認証情報を保存して再利用したい場合は `--save-auth` を使う
    - 既定保存先: `~/.config/calibre-metadata-apply/auth.json`
    - 既定では `username` と `password_env` を保存
    - 平文パスワードも保存する場合のみ `--save-plain-password` を追加
@@ -102,26 +95,19 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
 長時間処理はターン分割で実行し、チャット継続性を優先します。
 
 - 開始ターン:
-  - `subagent-spawn-command-builder` で `sessions_spawn` payloadを生成（例: `profile=calibre-meta`）
-  - 生成payloadで軽量subagentに解析を委譲
+  - scopeと出力契約を含む自己完結したtaskを作る
+  - OpenClaw `sessions_spawn`を直接呼んで解析を委譲
   - `scripts/run_state.mjs` で実行状態を記録
 - 完了ターン: 完了通知後、`scripts/handle_completion.mjs` で状態を片付けて結果を提示
 - state保存先: `state/runs.json`
 
-### `spawn-profiles.json` に追加する例（`calibre-meta`）
+### Subagent runtime
 
-```json
-{
-  "profiles": {
-    "calibre-meta": {
-      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
-      "thinking": "low",
-      "runTimeoutSeconds": 300,
-      "cleanup": "keep"
-    }
-  }
-}
-```
+`TOOLS.md` の `calibre-meta` 行はmodel・thinkingのローカル既定値です。
+
+- OpenClaw `sessions_spawn`を直接呼ぶ。
+- toolが公開する現在のschemaに従い、別の共通payloadを生成しない。
+- mainだけが候補の採否、dry-run、apply、ユーザー応答を担当する。
 
 ## 認証キャッシュ（初回保存）
 

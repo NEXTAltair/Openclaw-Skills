@@ -1,7 +1,7 @@
 ---
-name: calibre-catalog-read
-description: "Read-only Calibre catalog lookup, ID viewing, and one-book analysis comments workflow over a running Content server. Use for list/search/id viewing, including ID requests without edit verbs. Never for title/authors/tags/series/series_index metadata edits."
-metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","dependsOnSkills":["subagent-spawn-command-builder"],"localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
+name: "calibre-catalog-read"
+description: "Calibre catalog search, ID lookup, book viewing, and one-book analysis. Read-only; metadata edits use calibre-metadata-apply."
+metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
 # calibre-catalog-read
@@ -22,7 +22,7 @@ ID alone is not edit intent. 確認/見せて/教えて/詳細/check/show/view m
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth policy, and reading script.
+Read TOOLS.md for Content server URL, library id, auth policy, reading script, and optional subagent model defaults.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -32,7 +32,7 @@ Connection bootstrap:
 - Never start `calibre-server` from chat.
 - Do not assume localhost/127.0.0.1; TOOLS.md has the reachable server.
 
-Requirements: `calibredb`, `ebook-convert`, `node`, `uv`, and `subagent-spawn-command-builder`.
+Requirements: `calibredb`, `ebook-convert`, `node`, and `uv`.
 
 ## Commands
 
@@ -59,35 +59,23 @@ Run state:
 
 ## One-Book Analysis Flow
 
-Use subagent only for heavy reading. Keep main chat as control plane.
+Use a subagent only for heavy reading. Keep main chat as control plane.
 
-Before first subagent run in a session, confirm once:
-- model
-- thinking: low|medium|high
-- runTimeoutSeconds
-
-Reuse confirmed settings for later books in the same session unless the user changes them.
-
-Turn A, start only:
 1. Confirm target `book_id`.
 2. Prepare input with `scripts/prepare_subagent_input.mjs`.
-3. Use `subagent-spawn-command-builder` with profile `calibre-read`.
-4. Call `sessions_spawn`.
-5. Save run state with `scripts/run_state.mjs upsert`.
-6. Reply that analysis is running and stop the turn.
-
-Turn B, completion only:
-1. On completion event, run `scripts/handle_completion.mjs` with `--run-id` and `--analysis-json`.
-2. It applies comments, updates DB, and removes completed run state.
-3. If state is missing, treat as stale/duplicate and do not apply blindly.
+3. Build a self-contained analysis task from `references/subagent-analysis.prompt.md` and the generated `subagent_input.json` path.
+4. Call OpenClaw `sessions_spawn` directly with the self-contained task.
+   - Follow the schema exposed by the current tool.
+   - Do not generate or reuse a separate shared spawn payload.
+5. Use model/thinking defaults from TOOLS.md only when an override is needed.
+6. Save a run id with `scripts/run_state.mjs upsert` and keep the chat responsive. Do not busy-poll.
+7. When OpenClaw delivers completion, validate the raw JSON against `references/subagent-analysis.schema.json`, then run `scripts/handle_completion.mjs`.
 
 Hard rules:
-- Never poll/wait/apply in Turn A.
-- Never keep a chat listener turn open waiting for subagent completion.
 - One book per run.
 - Main session owns user-facing replies and Calibre comments apply.
-- Subagent only reads source payload and emits analysis JSON; it must not apply metadata or message the user.
-- Use strict prompt `references/subagent-analysis.prompt.md`; do not send ad-hoc relaxed read instructions.
+- Subagent only reads the prepared input and emits analysis JSON; it must not apply metadata or message the user.
+- Use `references/subagent-analysis.prompt.md`; do not send relaxed ad-hoc read instructions.
 - Input schema: `references/subagent-input.schema.json`; output schema: `references/subagent-analysis.schema.json`.
 - Exclude manga/comic-centric books from this text pipeline.
 - If extracted text is too short, stop and ask for confirmation.
@@ -102,5 +90,3 @@ Language policy:
 - Do not hardcode user-language prose in pipeline scripts.
 - Generate user-visible analysis from subagent output, with language controlled by user-selected settings and `lang` input.
 - Fallback local analysis is generic/minimal; preferred path is subagent output following the prompt template.
-
-Detailed legacy notes and command variants: references/full-pre-prune-2026-05-27.md.

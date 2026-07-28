@@ -9,15 +9,8 @@ Calibreカタログ参照 + 1冊単位のAI読書パイプライン。
 1. OpenClaw実行環境(このスキルを実行するマシン/ランタイム)にCalibreをインストールする。
    - 必須バイナリ: `calibredb` / `ebook-convert`
 2. 上記バイナリがPATHに通っていることを確認する。
-3. `subagent-spawn-command-builder` を導入する(spawn payload生成に使用)。
-
-```bash
-npx clawhub@latest install subagent-spawn-command-builder
-pnpm dlx clawhub@latest install subagent-spawn-command-builder
-```
-
-4. Calibre Content serverへ到達できることを確認する。
-5. 接続先は必ず明示的な `HOST:PORT` を使う。
+3. Calibre Content serverへ到達できることを確認する。
+4. 接続先は必ず明示的な `HOST:PORT` を使う。
    - `http://HOST:PORT/#LIBRARY_ID`
    - `--with-library` を省略する場合は以下を事前設定する。
      - env: `CALIBRE_WITH_LIBRARY` / `CALIBRE_LIBRARY_URL` / `CALIBRE_CONTENT_SERVER_URL`
@@ -28,7 +21,7 @@ pnpm dlx clawhub@latest install subagent-spawn-command-builder
      - WSLでは `/etc/resolv.conf` の `nameserver` も自動候補に追加
    - `LIBRARY_ID` が不明なら `#-` で一覧確認可能。
      - 例: `calibredb list --with-library "http://HOST:PORT/#-" --username ... --password ...`
-6. 認証が有効な場合は `~/.openclaw/.env` に設定する(推奨)。
+5. 認証が有効な場合は `~/.openclaw/.env` に設定する(推奨)。
    - `CALIBRE_USERNAME=<user>`
    - `CALIBRE_PASSWORD=<password>`
    - 認証方式は非SSL運用前提でDigest固定(自動)とし、`--auth-mode` / `--auth-scheme` は使わない
@@ -84,8 +77,8 @@ node scripts/prepare_subagent_input.mjs \
 
 1) 開始ターン(高速)
 - 対象選定
-- `subagent-spawn-command-builder` で `sessions_spawn` payloadを生成
-- 生成payloadでspawn
+- `references/subagent-analysis.prompt.md` と対象ファイルから自己完結したtaskを作る
+- OpenClaw `sessions_spawn`を直接呼んで委譲する
 - `run_state.mjs upsert`
 - 即時ACK
 
@@ -93,48 +86,17 @@ node scripts/prepare_subagent_input.mjs \
 - 完了イベント
 - `handle_completion.mjs`(内部で `get -> apply -> remove/fail`)
 
-spawnと同一ターンで `poll/wait/apply` を行わないでください。
+busy-pollは行わず、runtimeの完了通知を待ってください。
 
-## spawn payload生成例(builder利用)
+## Subagent delegation
 
-まず `subagent-spawn-command-builder` 側の `spawn-profiles.json` に
-`calibre-read` プロファイルを定義します。
+`TOOLS.md` の `calibre-read` プロファイルからmodel・thinking・cleanupを読みます。
 
-例:
-
-```json
-{
-  "version": 1,
-  "defaults": {
-    "runTimeoutSeconds": 300,
-    "cleanup": "keep"
-  },
-  "profiles": {
-    "calibre-read": {
-      "model": "openrouter/qwen/qwen3-next-80b-a3b-instruct",
-      "thinking": "low",
-      "runTimeoutSeconds": 300,
-      "cleanup": "keep"
-    }
-  }
-}
-```
-
-そのうえで、まずは**スキル呼び出しとして**次の意図で実行します:
-
-- `subagent-spawn-command-builder` を使って `calibre-read` の `sessions_spawn` payloadを生成する
-- `task` には `references/subagent-analysis.prompt.md` ベースの解析指示を渡す
-
-内部実装コマンド(低レベル)は次のとおり:
-
-```bash
-uv run python ../subagent-spawn-command-builder/scripts/build_spawn_payload.py \
-  --profile calibre-read \
-  --task "<analysis task text based on references/subagent-analysis.prompt.md>"
-```
-
-出力JSONをそのまま `sessions_spawn` に渡します。
+- OpenClaw `sessions_spawn`を直接呼ぶ。
+- toolが公開する現在のschemaに従い、別の共通payloadを生成しない。
+- model/thinkingは必要な場合だけ明示する。
+- timeoutやcompletion routingはOpenClawの設定・lifecycleに任せる。
 
 注意:
-- `--task` は必ず `references/subagent-analysis.prompt.md` の厳格read契約を含む内容にする。
-- `read` ツールは `{"path":"..."}` 形式のみを使う(pathなし呼び出し禁止)。
+- taskは必ず`references/subagent-analysis.prompt.md`の入力・出力・権限契約を含める。
+- subagentは解析JSONだけを返し、Calibre更新やユーザー応答を行わない。
