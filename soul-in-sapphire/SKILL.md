@@ -1,6 +1,6 @@
 ---
 name: "soul-in-sapphire"
-description: "Continuity, durable memory, mood/state, journal, identity diff, heartbeat state, and profile promotion for Valentina/OpenClaw."
+description: "Continuity, durable memory, state, journal, and identity maintenance."
 metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH"]}}
 ---
 
@@ -16,12 +16,12 @@ Heartbeat/current-state maintenance:
 3. Write a state snapshot with `scripts/emostate_tick.js` when meaningful.
 4. Update `memory/now-state.json` mirror with mood, intent, stress, updated_at, source, note.
 5. If heartbeat asks for evolution note, append a short daily note after the state write.
-6. If `memory/soul-in-sapphire/ambient-recall.json` exists in the agent workspace and is not expired, read it as quiet context only. Do not reroll here and do not announce it unless it naturally matters.
+6. If `memory/soul-in-sapphire/ambient-recall.json` exists and is not expired, read it as quiet context only. Do not reroll or announce it unless it naturally matters.
 
 Mood/check-in:
 - Read `memory/now-state.json` first.
-- If stale/thin, recall recent Notion-backed state/journal via this skill before answering.
-- Answer in 1-3 concrete sentences; describe present state and one concrete reason, not generic status.
+- If stale/thin, recall recent Notion-backed state/journal before answering.
+- Answer in 1-3 concrete sentences; describe present state and one concrete reason.
 
 Durable memory:
 - Distill one high-signal item.
@@ -31,7 +31,7 @@ Durable memory:
 Journal:
 - Use `scripts/journal_write.js` for daily synthesis, not raw log dumping.
 - Gather day-level worklog, emotional tone, unresolved tensions, and future intent.
-- Add 1-2 world/news items only when the caller requested them or cron requires them.
+- Add 1-2 world/news items only when requested or cron requires them.
 
 Identity/continuity:
 - Recall relevant state/memory.
@@ -46,9 +46,9 @@ Good candidates:
 - language preference.
 - preferred address/call style.
 - tone/style preferences.
-- recurring dislikes or pet peeves in replies.
+- recurring dislikes or pet peeves.
 - durable workflow preferences.
-- stable decision rules the user repeatedly expresses.
+- stable decision rules repeatedly expressed.
 
 Do not promote:
 - one-off task instructions.
@@ -57,27 +57,30 @@ Do not promote:
 - raw private facts with no conversational value.
 - secrets, credentials, financial data, intimate personal data, or anything the user would reasonably expect not to be crystallized into a profile file.
 
-If uncertain, write to daily memory first. Current user message overrides `USER.md`; `USER.md` stores defaults, not hard constraints.
+If uncertain, write to daily memory first. Current user instructions override `USER.md`; `USER.md` stores defaults.
 
 ## Failure Rules
 
 - Notion write failure is real; do not pretend local mirrors are durable memory.
 - Local files (`memory/*.md`, `memory/now-state.json`) are mirrors and fallbacks, not substitutes for a requested durable Notion write.
-- If caller explicitly asks for local-only behavior, say so and keep the write local.
+- If the caller asks for local-only behavior, say so and keep the write local.
 - For heartbeat/state maintenance, update `memory/now-state.json` even if Notion fails, and report durable-write failure when relevant.
-- Keep writes high-signal; avoid dumping full chats.
+- Keep writes high-signal; avoid full chat dumps.
 - If heartbeat is comment-only, emotion tick may be skipped.
 - `emostate_tick.js` rejects empty or semantically empty payloads; pass a real payload file/json.
 
-## Subagent Delegation
+## Delegation
 
-Most continuity work stays in main. Delegate only independent heavy analysis such as sorting a large journal corpus.
+Keep normal continuity work in main. Delegate only independent, read-only corpus analysis such as sorting a large journal set.
 
-- Call OpenClaw `sessions_spawn` directly.
-- Follow the schema exposed by the current tool.
-- Do not generate or reuse a separate shared spawn payload.
-- Read model/thinking defaults from TOOLS.md only when an override is needed.
-- Subagent returns analysis only. Main owns Notion writes, core identity edits, memory promotion, and user-facing replies.
+For that explicit OpenClaw delegation:
+- Build a self-contained task with exact input paths and an analysis-only output contract.
+- Call `sessions_spawn` with the live tool schema using `runtime: "subagent"`, `agentId: "analysis-worker"`, `mode: "run"`, `context: "isolated"`, and `lightContext: true`.
+- Omit `model` and `thinking`; the target agent profile owns them.
+- Use `sessions_yield` when completion belongs in a later turn. Do not poll session or subagent lists.
+- Use Swarm only for several independent corpus partitions; main validates and synthesizes collector results.
+
+Child output is evidence only. Main owns Notion writes, state mirrors, core identity edits, profile promotion, journal writes, and user-facing replies.
 
 ## Database IDs
 
@@ -85,11 +88,7 @@ Read TOOLS.md section Soul-in-Sapphire Notion Databases and pass explicit IDs to
 
 ## Notion Auth
 
-Provide Notion auth through `NOTION_API_KEY` / `NOTION_TOKEN`, or configure
-`skills.entries["soul-in-sapphire"].apiKey` in OpenClaw. The `apiKey` field is
-associated with this skill's `primaryEnv` and is injected as `NOTION_API_KEY`
-for the host agent run. It may be a plaintext value or any OpenClaw SecretRef
-supported by the local gateway (`env`, `file`, `exec`, etc.).
+Provide Notion auth through `NOTION_API_KEY` / `NOTION_TOKEN`, or configure `skills.entries["soul-in-sapphire"].apiKey` in OpenClaw. The `apiKey` field is associated with this skill's `primaryEnv` and is injected as `NOTION_API_KEY` for the host agent run. It may be plaintext or any supported OpenClaw SecretRef (`env`, `file`, `exec`, etc.).
 
 Do not hardcode provider-specific secret paths in this shared skill. Example:
 
@@ -134,8 +133,8 @@ Continuity helpers:
 - Use `emostate_tick.js` when a real event changes mood, intent, stress, or need.
 - Use `journal_write.js` when the day needs synthesis, not just logging.
 - Search durable memory with `ltm_search.js` before guessing past decisions.
-- Treat ambient recall as internal context injection, not a user-visible recall log. The script stages at most one short item under workspace `memory/soul-in-sapphire/`; conversation and heartbeat paths only read unexpired staged recall and never reroll.
+- Treat ambient recall as internal context injection. The staging script places at most one short item under `memory/soul-in-sapphire/`; conversation and heartbeat paths only read unexpired staged recall and never reroll.
 - Draft proposed identity/profile text separately before editing core files.
-- Prefer `identity_diff.js` before any self-description update so the change stays inspectable.
+- Prefer `identity_diff.js` before self-description updates so changes remain inspectable.
 
-Evolution triggers worth tracking: repeated mood/intent patterns, stable preferences across sessions, recurring internal conflicts, and identity claims that survive comparison against recent memory.
+Track repeated mood/intent patterns, stable preferences across sessions, recurring internal conflicts, and identity claims that survive comparison against recent memory.

@@ -1,6 +1,6 @@
 ---
 name: "calibre-catalog-read"
-description: "Calibre catalog search, ID lookup, book viewing, and one-book analysis. Read-only; metadata edits use calibre-metadata-apply."
+description: "Calibre catalog lookup, viewing, and delegated one-book analysis."
 metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
 ---
 
@@ -22,7 +22,7 @@ ID alone is not edit intent. 確認/見せて/教えて/詳細/check/show/view m
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth policy, reading script, and optional subagent model defaults.
+Read TOOLS.md for Content server URL, library id, auth policy, and reading script.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -59,23 +59,29 @@ Run state:
 
 ## One-Book Analysis Flow
 
-Use a subagent only for heavy reading. Keep main chat as control plane.
+Delegate only full-book reading. Main remains the control plane.
 
 1. Confirm target `book_id`.
 2. Prepare input with `scripts/prepare_subagent_input.mjs`.
-3. Build a self-contained analysis task from `references/subagent-analysis.prompt.md` and the generated `subagent_input.json` path.
-4. Call OpenClaw `sessions_spawn` directly with the self-contained task.
-   - Follow the schema exposed by the current tool.
-   - Do not generate or reuse a separate shared spawn payload.
-5. Use model/thinking defaults from TOOLS.md only when an override is needed.
-6. Save a run id with `scripts/run_state.mjs upsert` and keep the chat responsive. Do not busy-poll.
-7. When OpenClaw delivers completion, validate the raw JSON against `references/subagent-analysis.schema.json`, then run `scripts/handle_completion.mjs`.
+3. Build a self-contained task from `references/subagent-analysis.prompt.md` and the generated `subagent_input.json` path.
+4. Call OpenClaw `sessions_spawn` with the live tool schema:
+   - `runtime: "subagent"`
+   - `agentId: "calibre-reader"`
+   - `mode: "run"`
+   - `context: "isolated"`
+   - `lightContext: true`
+   - omit `model` and `thinking`; the target agent profile owns them.
+5. Save the returned run/session identifiers with `scripts/run_state.mjs upsert`.
+6. Use `sessions_yield` when completion belongs in a later turn. Do not poll session or subagent lists.
+7. On completion, validate the raw JSON against `references/subagent-analysis.schema.json`, then run `scripts/handle_completion.mjs`.
+
+Use Swarm only for an explicitly requested independent multi-book batch. Keep one book per child and preserve the same input/output contract.
 
 Hard rules:
-- One book per run.
-- Main session owns user-facing replies and Calibre comments apply.
-- Subagent only reads the prepared input and emits analysis JSON; it must not apply metadata or message the user.
-- Use `references/subagent-analysis.prompt.md`; do not send relaxed ad-hoc read instructions.
+- One book per child run.
+- Main owns user-facing replies and Calibre comments apply.
+- Child reads prepared input and emits analysis JSON only; it must not apply metadata or message the user.
+- Use `references/subagent-analysis.prompt.md`; do not send relaxed ad-hoc instructions.
 - Input schema: `references/subagent-input.schema.json`; output schema: `references/subagent-analysis.schema.json`.
 - Exclude manga/comic-centric books from this text pipeline.
 - If extracted text is too short, stop and ask for confirmation.
@@ -84,9 +90,9 @@ Hard rules:
 
 ## Cache And Language
 
-Cache DB is `skills/calibre-catalog-read/state/calibre_analysis.sqlite`. Treat cache as acceleration, not authority; final user-visible answer should reflect current target and completed run.
+Cache DB is `skills/calibre-catalog-read/state/calibre_analysis.sqlite`. Treat cache as acceleration, not authority; final user-visible analysis must reflect the current target and completed run.
 
 Language policy:
 - Do not hardcode user-language prose in pipeline scripts.
-- Generate user-visible analysis from subagent output, with language controlled by user-selected settings and `lang` input.
-- Fallback local analysis is generic/minimal; preferred path is subagent output following the prompt template.
+- Generate user-visible analysis from child output, controlled by user settings and the `lang` input.
+- Local fallback analysis is generic/minimal; prefer output following the prompt template.

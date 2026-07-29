@@ -1,6 +1,6 @@
 ---
 name: "calibre-metadata-apply"
-description: "Edit Calibre title, authors, series, tags, dates, comments, and analysis metadata with dry-run/apply gates."
+description: "Edit Calibre metadata through verified dry-run and apply gates."
 metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
@@ -58,7 +58,7 @@ Never:
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth, reading script, and optional subagent model defaults.
+Read TOOLS.md for Content server URL, library id, auth, and reading script.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -120,20 +120,25 @@ Required report shape for batch recovery:
 
 ## Heavy Analysis
 
-Use native subagent delegation only for heavy proposal generation. Main owns final decisions, dry-run, apply, and final report.
+Delegate only independent proposal generation. Main owns target selection, final judgment, dry-run, apply, and reporting.
 
-1. Main defines scope and a self-contained task with required input paths, evidence limits, and output contract.
-2. Call OpenClaw `sessions_spawn` directly with the self-contained task.
-   - Follow the schema exposed by the current tool.
-   - Do not generate or reuse a separate shared spawn payload.
-3. Use model/thinking defaults from TOOLS.md only when an override is needed.
-4. Save `run_id`, the returned OpenClaw session handle, and task via `scripts/run_state.mjs upsert`.
-5. Keep normal chat responsive and consume the OpenClaw completion event; do not busy-poll.
-6. Save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
-7. Return a proposal or apply result only after the existing user gate is satisfied.
+1. Define a self-contained task with input paths, evidence limits, and output contract.
+2. Call OpenClaw `sessions_spawn` with the live tool schema:
+   - `runtime: "subagent"`
+   - `agentId: "calibre-reader"`
+   - `mode: "run"`
+   - `context: "isolated"`
+   - `lightContext: true`
+   - omit `model` and `thinking`; the target agent profile owns them.
+3. Save the returned run/session identifiers and task with `scripts/run_state.mjs upsert`.
+4. Use `sessions_yield` when completion belongs in a later turn. Do not poll session or subagent lists.
+5. Save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
+6. Return a proposal or apply result only after the existing user gate is satisfied.
+
+Use Swarm only when the user requests a large batch that divides into independent evidence rows. Collector children remain read-only; the main session owns synthesis and every write gate.
 
 Data flow:
-- Local execution reads Calibre metadata/files and writes Calibre metadata only after approval.
-- Optional subagent execution may receive extracted source/evidence for heavy candidate generation.
-- Subagent must not apply metadata or message the user.
-- If user does not want external model/subagent processing, keep flow local and skip delegation.
+- Local execution reads Calibre metadata/files and writes metadata only after approval.
+- Child execution may receive extracted source/evidence for candidate generation.
+- Child must not apply metadata or message the user.
+- If the user declines external model/subagent processing, keep the flow local.
