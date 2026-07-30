@@ -22,6 +22,7 @@ self-improvement/
 moltbook-interact/
 skill-vetter/
 oracle/
+moltbook/
 
 # 自作・非公開（環境依存が強い）
 lorairo-mem/
@@ -31,3 +32,7 @@ rr-renamer/
 
 # ランタイム状態は無視（ユーザー設定はTOOLS.mdに移行済み）
 state/
+
+#puluginからの配布
+video-library-pipeline/
+voice/
