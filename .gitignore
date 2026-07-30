@@ -30,7 +30,7 @@ lorairo-mem/
 # 完成度が低いので一旦無視
 rr-renamer/
 
-# ランタイム状態は無視（ユーザー設定はTOOLS.mdに移行済み）
+# ランタイム状態は無視（ユーザー設定はworkspaceのAGENTS.md ## Toolsで管理）
 state/
 
 #puluginからの配布

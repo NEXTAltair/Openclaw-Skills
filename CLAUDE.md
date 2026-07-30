@@ -72,7 +72,8 @@ its own current schema.
 ## Credential and Configuration Handling
 
 - **認証情報** (API keys, passwords): `~/.openclaw/.env` の環境変数経由（gateway起動時にロード）
-- **ユーザー設定** (サーバーURL, DB ID, モデル設定など): ワークスペースの `TOOLS.md` に記載。AIが読み取ってCLI引数でスクリプトに渡す
+- **ユーザー設定** (サーバーURL, DB IDなど): ワークスペースの `AGENTS.md` `## Tools` セクションに記載。AIが読み取ってCLI引数でスクリプトに渡す
+- **モデル設定**: OpenClawのagent profileで管理する
 - Never commit credentials; never hardcode tokens in scripts
 
 ## State Files
@@ -90,6 +91,6 @@ soul-in-sapphire        ─depends on──▶  notion-api-automation (ClawHub)
 
 1. Create `skill-name/SKILL.md` with complete frontmatter
 2. Put scripts in `skill-name/scripts/`
-3. ユーザー固有の設定値はスクリプト内に保存せず、`TOOLS.md` 参照 + CLI引数で渡す設計にする
+3. ユーザー固有の設定値はスクリプト内に保存せず、workspaceの`AGENTS.md` `## Tools`セクション参照 + CLI引数で渡す設計にする
 4. Do NOT add the skill name to `.gitignore` (that's only for ClawHub-installed skills)
 5. Add the skill name to `README.md` under "Included custom skills"

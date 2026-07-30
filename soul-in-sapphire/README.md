@@ -332,7 +332,7 @@ OpenClawの cron/heartbeat は環境ごとに設定してください。
 通常のmemory/state処理はmainで実行します。大量のjournal材料整理など、
 独立した重処理だけをsubagentへ委譲してください。
 
-- model/thinkingのローカル既定値はworkspaceの`TOOLS.md`で管理する。
+- model/thinkingのローカル既定値は設定済みのagent profileで管理する。
 - OpenClaw `sessions_spawn`を直接呼ぶ。
 - toolが公開する現在のschemaに従い、別の共通payloadを生成しない。
 - subagentは分析だけを返し、Notion書き込み、core identity編集、

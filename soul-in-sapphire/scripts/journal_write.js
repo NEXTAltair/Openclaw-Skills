@@ -65,7 +65,7 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv);
   const journalDb = args.journalDbid;
-  if (!journalDb) die('Missing --journal-dbid. Check TOOLS.md for the value.');
+  if (!journalDb) die('Missing --journal-dbid. Check the workspace AGENTS.md ## Tools section for the value.');
 
   const raw = fs.readFileSync(0, 'utf-8').trim();
   if (!raw) die('Expected JSON on stdin');

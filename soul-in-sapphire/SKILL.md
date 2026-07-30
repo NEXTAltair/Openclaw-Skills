@@ -84,7 +84,7 @@ Child output is evidence only. Main owns Notion writes, state mirrors, core iden
 
 ## Database IDs
 
-Read TOOLS.md section Soul-in-Sapphire Notion Databases and pass explicit IDs to scripts. Notion API version: 2025-09-03.
+Read the `Soul-in-Sapphire Notion Databases` subsection of the workspace `AGENTS.md` `## Tools` section and pass explicit IDs to scripts. Notion API version: 2025-09-03.
 
 ## Notion Auth
 

@@ -7,7 +7,7 @@
  * - upserts by configured keys
  * - patches only missing fields unless overwrite=true
  *
- * All Notion IDs are passed as CLI arguments (see TOOLS.md for values):
+ * All Notion IDs are passed as CLI arguments (see the workspace AGENTS.md ## Tools section for values):
  *   --pcconfig-dsid / --pcconfig-dbid
  *   --pcinput-dsid  / --pcinput-dbid
  *   --storage-dsid  / --storage-dbid
@@ -384,7 +384,7 @@ function requireIds(ids, target) {
   if (!t.data_source_id) missing.push(`--${target}-dsid`);
   if (!t.database_id) missing.push(`--${target}-dbid`);
   if (missing.length) {
-    die(`Missing Notion IDs: ${missing.join(', ')}. Check TOOLS.md for the values.`);
+    die(`Missing Notion IDs: ${missing.join(', ')}. Check the workspace AGENTS.md ## Tools section for the values.`);
   }
 }
 

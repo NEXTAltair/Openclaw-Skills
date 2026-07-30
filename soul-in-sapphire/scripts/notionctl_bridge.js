@@ -163,7 +163,7 @@ function httpJson(method, apiPath, payload = undefined) {
 
 function requireIds(cfg) {
   for (const k of ['data_source_id', 'database_id']) {
-    if (!cfg?.[k]) throw new Error(`Missing ${k}. Check TOOLS.md for the value.`);
+    if (!cfg?.[k]) throw new Error(`Missing ${k}. Check the workspace AGENTS.md ## Tools section for the value.`);
   }
 }
 

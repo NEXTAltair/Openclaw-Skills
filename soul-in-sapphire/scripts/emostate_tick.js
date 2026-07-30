@@ -313,7 +313,7 @@ async function main() {
   const emotionsDb = args.emotionsDbid;
   const stateDb = args.stateDbid;
   const stateDs = args.stateDsid;
-  if (!(eventsDb && emotionsDb && stateDb && stateDs)) die('Missing --events-dbid, --emotions-dbid, --state-dbid, --state-dsid. Check TOOLS.md for the values.');
+  if (!(eventsDb && emotionsDb && stateDb && stateDs)) die('Missing --events-dbid, --emotions-dbid, --state-dbid, --state-dsid. Check the workspace AGENTS.md ## Tools section for the values.');
 
   const event = payload.event || {};
   const emotions = payload.emotions || [];

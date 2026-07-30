@@ -6,7 +6,7 @@
  *   <base>-mem, <base>-events, <base>-emotions, <base>-state
  *
  * Base defaults to IDENTITY.md Name (workspace root) if found.
- * Outputs JSON with database IDs to stdout (copy values into TOOLS.md)
+ * Outputs JSON with database IDs to stdout (copy values into the workspace AGENTS.md ## Tools section)
  */
 
 import fs from 'fs';
@@ -224,7 +224,7 @@ async function main() {
     journal_data_source_id: journal.dataSourceId,
   };
 
-  console.log(JSON.stringify({ ok: true, created, config: cfg, hint: 'Copy the database IDs above into TOOLS.md' }, null, 2));
+  console.log(JSON.stringify({ ok: true, created, config: cfg, hint: 'Copy the database IDs above into the workspace AGENTS.md ## Tools section' }, null, 2));
 }
 
 main().catch(err => die(err?.stack || err?.message || String(err)));

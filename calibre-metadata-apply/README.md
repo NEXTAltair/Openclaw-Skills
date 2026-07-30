@@ -103,7 +103,7 @@ WindowsではDefender Controlled Folder Access等の影響で書き込みが失�
 
 ### Subagent runtime
 
-`TOOLS.md` の `calibre-meta` 行はmodel・thinkingのローカル既定値です。
+model・thinkingのローカル既定値は設定済みの`calibre-reader` agent profileで管理します。
 
 - OpenClaw `sessions_spawn`を直接呼ぶ。
 - toolが公開する現在のschemaに従い、別の共通payloadを生成しない。

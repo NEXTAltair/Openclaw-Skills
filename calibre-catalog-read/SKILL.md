@@ -22,7 +22,7 @@ ID alone is not edit intent. 確認/見せて/教えて/詳細/check/show/view m
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth policy, and reading script.
+Read the workspace `AGENTS.md` `## Tools` section for Content server URL, library id, auth policy, and reading script.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -30,7 +30,7 @@ Connection bootstrap:
 - Ask for URL only if resolution fails (`missing --with-library` or unable to resolve usable library).
 - Non-SSL auth is Digest; do not pass auth-mode/auth-scheme flags.
 - Never start `calibre-server` from chat.
-- Do not assume localhost/127.0.0.1; TOOLS.md has the reachable server.
+- Do not assume localhost/127.0.0.1; the workspace `AGENTS.md` `## Tools` section has the reachable server.
 
 Requirements: `calibredb`, `ebook-convert`, `node`, and `uv`.
 

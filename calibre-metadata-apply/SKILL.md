@@ -58,7 +58,7 @@ Never:
 
 ## Local Facts
 
-Read TOOLS.md for Content server URL, library id, auth, and reading script.
+Read the workspace `AGENTS.md` `## Tools` section for Content server URL, library id, auth, and reading script.
 
 Connection bootstrap:
 - Do not ask the user for `--with-library` first.
@@ -114,9 +114,9 @@ Required report shape for batch recovery:
 - Try `ebook-convert` first.
 - If empty/failed, fallback to `pdftotext`.
 - If both fail, switch to web-evidence-first mode.
-- Use TOOLS.md Calibre `reading_script` for Japanese/non-Latin sort fields.
+- Use the Calibre `reading_script` in the workspace `AGENTS.md` `## Tools` section for Japanese/non-Latin sort fields.
 - Default policy is full reading, no truncation.
-- Ask once on first use only when TOOLS.md lacks the configured reading script.
+- Ask once on first use only when the workspace `AGENTS.md` `## Tools` section lacks the configured reading script.
 
 ## Heavy Analysis
 

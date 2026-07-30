@@ -1,6 +1,6 @@
 ---
-name: diy-pc-ingest
-description: Ingest pasted PC parts purchase/config text (Discord message receipts, bullet lists) into Notion DIY_PC tables (PCConfig, ストレージ, エンクロージャー, PCInput). Use when the user pastes raw purchase logs/spec notes and wants the AI to classify, enrich via web search, ask follow-up questions for unknowns, and then upsert rows into the correct Notion data sources using the 2025-09-03 data_sources API.
+name: "diy-pc-ingest"
+description: "Ingest pasted PC parts receipts or specs into Notion DIY_PC tables with classification, enrichment, follow-up, and upsert."
 metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","NOTIONCTL_PATH"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
 ---
 
@@ -16,7 +16,7 @@ Install the required dependency skill via ClawHub before using this skill:
 clawhub install notion-api-automation
 ```
 
-1) Read the "DIY-PC Notion Targets" table in TOOLS.md for the data_source_id and database_id values for each target. Pass them as explicit CLI arguments:
+1) Read the `DIY-PC Notion Targets` table in the workspace `AGENTS.md` `## Tools` section for the data_source_id and database_id values for each target. Pass them as explicit CLI arguments:
 - `--pcconfig-dsid`, `--pcconfig-dbid`
 - `--pcinput-dsid`, `--pcinput-dbid`
 - `--storage-dsid`, `--storage-dbid`
@@ -64,7 +64,7 @@ Security rules:
 
 Use **data_sources** endpoints for schema/query, and **pages** endpoint for row creation.
 
-IDs are documented in the "DIY-PC Notion Targets" table in TOOLS.md. Pass them as CLI arguments at runtime.
+IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS.md` `## Tools` section. Pass them as CLI arguments at runtime.
 
 ## Workflow (A: user pastes raw text)
 

@@ -36,7 +36,7 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv);
   const dsId = args.stateDsid;
-  if (!dsId) throw new Error('Missing --state-dsid. Check TOOLS.md for the value.');
+  if (!dsId) throw new Error('Missing --state-dsid. Check the workspace AGENTS.md ## Tools section for the value.');
   const pages = queryRecent(dsId, Math.max(1, args.limit));
   const out = pages.map(normalizeStatePage);
   if (args.write) {

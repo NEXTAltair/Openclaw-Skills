@@ -90,7 +90,7 @@ busy-pollは行わず、runtimeの完了通知を待ってください。
 
 ## Subagent delegation
 
-`TOOLS.md` の `calibre-read` プロファイルからmodel・thinking・cleanupを読みます。
+model・thinking・cleanupは設定済みの`calibre-reader` agent profileから読みます。
 
 - OpenClaw `sessions_spawn`を直接呼ぶ。
 - toolが公開する現在のschemaに従い、別の共通payloadを生成しない。

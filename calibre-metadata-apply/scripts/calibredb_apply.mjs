@@ -222,7 +222,7 @@ function buildWithLibraryCandidates(args) {
     .filter(Boolean);
 
   if (!baseCandidates.length) {
-    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL). Check TOOLS.md for the value.');
+    throw new Error('missing --with-library (or set CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL). Check the workspace AGENTS.md ## Tools section for the value.');
   }
 
   const expanded = [];
