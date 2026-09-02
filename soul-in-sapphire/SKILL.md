@@ -32,6 +32,7 @@ Journal:
 - Use `scripts/journal_write.js` for daily synthesis, not raw log dumping.
 - Gather day-level worklog, emotional tone, unresolved tensions, and future intent.
 - Add 1-2 world/news items only when requested or cron requires them.
+- When any continuity database appears stale, audit the whole pipeline before repairing one sink: compare the latest Notion rows for mem/events/state/journal, local mirrors, automation definitions and run history, and the exact scheduled prompt. A successful scheduled run proves execution only, not semantic correctness.
 
 Identity/continuity:
 - Recall relevant state/memory.
