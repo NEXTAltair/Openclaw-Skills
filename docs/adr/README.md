@@ -6,6 +6,7 @@ Openclaw-Skills の重要な設計判断を記録するドキュメント群。
 |-----|---------|------|-----------|
 | [0001](0001-soul-in-sapphire-ambient-recall-dice.md) | Soul in Sapphire の ambient recall dice と workspace staging | 2026-06-05 | Accepted |
 | [0002](0002-separate-skill-source-from-runtime-installation.md) | skill の authoring source と runtime installation を分離する | 2026-09-02 | Accepted |
+| [0003](0003-preserve-relational-reflection-without-asserting-user-psychology.md) | 関係的な推論を残しつつユーザー心理を事実化しない | 2026-09-03 | Accepted |
 
 ## ADR テンプレート
 
