@@ -21,9 +21,14 @@ function notionctlPath() {
     return explicit;
   }
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const p = path.resolve(here, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs');
-  if (!fs.existsSync(p)) throw new Error(`notionctl not found (set NOTIONCTL_PATH to override): ${p}`);
-  return p;
+  const candidates = [
+    path.resolve(here, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs'),
+    // Owner-qualified installs live under skills/@owner/<slug>/scripts.
+    path.resolve(here, '..', '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs'),
+  ];
+  const found = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!found) throw new Error(`notionctl not found (set NOTIONCTL_PATH to override): ${candidates[0]}`);
+  return found;
 }
 
 function parseNotionctlJson(raw) {

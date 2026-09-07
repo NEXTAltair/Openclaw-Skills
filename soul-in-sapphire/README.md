@@ -7,7 +7,7 @@ OpenClawは「会話ログ」は残る一方で、**人格/気分/学び/その�
 
 狙いは3つ:
 
-1) **Durable memory**: 汎用の長期メモリ(LTM)を残し、後から検索して会話/作業に戻す
+1) **Emotion-linked memory / continuity**: 経験とそのときの感情をNotionに残して思い出し、自己状態の連続性と未解決の内的葛藤を扱う
 2) **Emotion/State**: 出来事(event)に複数の感情を紐づけ、状態(state)を更新して「育つ感じ」を出す
 3) **Journal**: 毎日1回、世界の出来事(ニュース) + 仕事/会話 + 感情 + 未来を短くまとめ、記憶の層を厚くする
 
@@ -21,7 +21,11 @@ OpenClawは「会話ログ」は残る一方で、**人格/気分/学び/その�
 
 ---
 
-OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運用。
+OpenClaw向けの Emotion/State + Subjective Journal + Identity continuity 運用。
+
+OpenClaw は一般的な作業・会話記憶を扱います。Soul の Notion は感情と結びついた経験記憶を保存・想起する中核であり、廃止候補や単なるarchiveではありません。同じ出来事でも保存する意味は異なります。主観日記も Dreaming の consolidation report とは別物です。
+
+記憶の責務・保存経路の監査・消費記録は [memory-transition.md](references/memory-transition.md) を参照してください。ソース更新だけでは既存の runtime snapshot や cron は変わりません。
 
 - Notion API **2025-09-03**(data_sources世代) 前提
 - 個人のNotion token/IDはリポジトリに含めない
@@ -31,8 +35,9 @@ OpenClaw向けのNotionベースLTM(長期記憶) + Emotion/State + Journal運�
 
 このスキルは2系統あります。
 
-1. **LTM(汎用メモリ)系**
-   - 決定事項/好み/手順/注意点をNotionに保存し、あとで検索して使う
+1. **Self continuity 系**
+   - 自分自身の状態を読み、反復する傾向と一時的な変化を区別する
+   - 一般的な決定事項/好み/過去の作業は OpenClaw memory tools で参照する
 
 2. **Emotion/State + Journal 系**
    - event(出来事)に対して複数のemotionをぶら下げ、stateを更新する
@@ -57,8 +62,8 @@ pnpm dlx clawhub@latest install notion-api-automation
 
 ## Notionデータベース設計(必須)
 
-このスキルを他ユーザーが再利用する場合、まず以下5つのDB構成を揃える必要があります。
-`setup_ltm.js` を使うと自動作成されますが、手動で作る場合も同じプロパティ名を使ってください。
+このスキルを他ユーザーが再利用する場合、まずmem/events/emotions/state/journal の5つのDB構成を揃えます。
+`setup_ltm.js` は5DBを作成/再利用しますが、手動で作る場合も同じプロパティ名を使ってください。
 
 作成対象:
 
@@ -68,9 +73,9 @@ pnpm dlx clawhub@latest install notion-api-automation
 - `<base>-state`
 - `<base>-journal`
 
-### 1) `<base>-mem` (長期記憶)
+### 1) `<base>-mem` (Notion長期記憶)
 
-- 目的: 高シグナルな記憶を保存
+- 目的: Soulの長期記憶を継続して保存・想起する。感情との関係は実際のevent/emotion/stateレコードとあわせて確認する。mem検索CLIだけではrelationを取得しない。
 - プロパティ:
   - `Name` (title)
   - `Type` (select): `decision|preference|fact|procedure|todo|gotcha`
@@ -159,9 +164,7 @@ pnpm dlx clawhub@latest install notion-api-automation
 ### 2) APIキー
 従来どおり環境変数で渡せます。
 
-```bash
-export NOTION_API_KEY="..."
-```
+認証値はホスト側の保護された入力経路で登録してください。チャットやコマンド引数へ貼り付けないでください。
 
 OpenClaw運用では `skills.entries["soul-in-sapphire"].apiKey` も使えます。
 `apiKey` はこのskillの `primaryEnv` である `NOTION_API_KEY` として実行時に注入されます。
@@ -183,7 +186,7 @@ SecretRef provider はユーザー環境ごとに異なるため、このskill�
 
 ### 3) DB作成 + config生成
 
-親ページ配下に以下を作成/再利用し、`~/.config/soul-in-sapphire/config.json` を生成します。
+親ページ配下に以下を作成/再利用し、DB ID を JSON で標準出力します。config ファイルは自動生成しません。
 
 - `<base>-mem`
 - `<base>-events`
@@ -194,13 +197,18 @@ SecretRef provider はユーザー環境ごとに異なるため、このskill�
 `<base>` は `--base` で指定。指定しない場合は workspace の `IDENTITY.md` の Name をデフォルトにします。
 
 ```bash
-node skills/soul-in-sapphire/scripts/setup_ltm.js \
+node scripts/setup_ltm.js \
   --parent "<Notion parent page url>" \
   --base "Valentina" \
   --yes
 ```
 
 ## 使い方
+
+以下のコマンドはインストール済みskillのbase directoryで実行します。
+`openclaw skills info soul-in-sapphire --agent <AGENT_ID> --json` の `baseDir` を確認して移動してください。
+owner付き配置でも固定の `skills/soul-in-sapphire` パスを仮定しません。
+ローカル記憶を扱う場合、`--workspace` はagent workspaceを明示します。
 
 ### Emotion/State: tick
 
@@ -232,7 +240,7 @@ cat <<'JSON' > /tmp/emostate_tick.json
   }
 }
 JSON
-node skills/soul-in-sapphire/scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
+node scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
 ```
 
 - stateは時間で5へ戻る(自然減衰)
@@ -251,10 +259,45 @@ echo '{
   "mood_label": "clear",
   "intent": "reflect",
   "source": "manual"
-}' | node skills/soul-in-sapphire/scripts/journal_write.js
+}' | node scripts/journal_write.js
 ```
 
-### Ambient recall: サイコロで1件stageする
+### 経験と当時の感情を一緒に思い出す
+
+`experience_recall.js` は実スキーマを確認し、event本文の検索または既知IDから
+実際の emotion/state relation をたどります。event側のrelationが空でも、
+emotion/state側の `event` を逆引きします。memの本文検索CLIは変更していません。
+
+```bash
+node scripts/experience_recall.js \
+  --query "思い出したい出来事" \
+  --events-dsid <EVENTS_DS_ID> \
+  --emotions-dsid <EMOTIONS_DS_ID> \
+  --state-dsid <STATE_DS_ID> \
+  --limit 3
+```
+
+`--query` の代わりに `--event-id <EVENT_PAGE_ID>` または
+`--state-id <STATE_PAGE_ID>` を指定できます。返るのは当時の感情/状態であり、
+現在の気分ではありません。既定上限はevent 3件、各lane 5件、API 32回、
+field text合計24000文字。欠損・古いschema・部分失敗・打ち切りは
+`complete:false` と `diagnostics` で明示します。`ok:true` だけで完全取得と判断しません。
+
+実監査でmemにはevent relationがありませんでした。Tagsや感情を表す本文と
+出典は保持しますが、似た日付/文章からeventとの関連を創作しません。
+詳細とscheduler/consumer用の反映テンプレートは
+[experience-recall.md](references/experience-recall.md) を参照してください。
+
+### Ambient recall (保持する想起経路)
+
+ambient recall は文脈に一致する過去だけでなく、経験を偶発的に思い出すための経路として保持します。既定で有効、`SIS_AMBIENT_RECALL=0` でproducer/consumerを一時停止できます。Notion LTM write/search は移行フラグなしで使えます。
+
+候補を読む場合は `read_ambient_recall.js --file <staged.json>` を使います。実際に会話へ利用した後だけ `--ack <candidate-id> --used-in <turn-reference>` で別ファイルに消費証跡を残します。読み取りは消費ではありません。dry-run は `status=preview, staged=false`、候補取得の例外は `ok=false` と非0終了です。
+
+Notion候補は短文に加えて `affect_context` に当時のラベル・状態・タグ・出典を
+保持します。state候補を元eventと一緒に解決する場合は
+`--resolve --events-dsid <EVENTS_DS_ID> --emotions-dsid <EMOTIONS_DS_ID> --state-dsid <STATE_DS_ID>`
+をreadに追加します。resolveも読み取りだけで、ackは実利用後の別呼び出しです。
 
 `stage_ambient_recall.js` は cron/script 側でだけサイコロを振り、当たった場合に agent workspace の memory 配下へ短い recall を最大1件だけstageします。会話側やheartbeat側では reroll せず、TTL内の staged recall があれば静かな作業コンテキストとして読むだけにします。
 
@@ -271,7 +314,7 @@ runtime state は skill repo ではなく agent workspace に置きます。
 手動実行例:
 
 ```bash
-node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+node scripts/stage_ambient_recall.js \
   --workspace ~/.openclaw/workspace/val \
   --timezone Asia/Tokyo \
   --ttl-minutes 120 \
@@ -281,7 +324,7 @@ node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
 Notion-backed shelf も使う場合は、必要な data source / database IDs を渡します。
 
 ```bash
-node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+node scripts/stage_ambient_recall.js \
   --workspace ~/.openclaw/workspace/val \
   --timezone Asia/Tokyo \
   --state-dsid <STATE_DS_ID> \
@@ -290,7 +333,7 @@ node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
   --mem-dbid <MEM_DB_ID>
 ```
 
-OpenClaw cron からは20分ごとに上記scriptを呼ぶ運用を想定しています。SecretRef / env 経由で `NOTION_API_KEY` が注入されていれば、Notionを読む棚も使えます。`--workspace` は対象agent/personaのworkspaceを指してください。`rollsToday` / `hitsToday` の日付境界は runtime のlocal timezoneを使い、必要に応じて `--timezone` または `SIS_AMBIENT_TIMEZONE` で上書きできます。
+OpenClaw cron の既存cadenceを維持して上記scriptを呼びます。ソース更新を理由に頻度を変更しません。SecretRef / env 経由で `NOTION_API_KEY` が注入されていれば、Notionを読む棚も使えます。`--workspace` は対象agent/personaのworkspaceを指してください。`rollsToday` / `hitsToday` の日付境界は runtime のlocal timezoneを使い、必要に応じて `--timezone` または `SIS_AMBIENT_TIMEZONE` で上書きできます。
 
 サイコロの初期仕様:
 
@@ -307,7 +350,7 @@ Dream shelf は OpenClaw workspace の `DREAMS.md` と `memory/dreaming/{rem,lig
 検証用:
 
 ```bash
-node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
+node scripts/stage_ambient_recall.js \
   --workspace /tmp/sis-ambient-test \
   --force-roll 6 \
   --dry-run
@@ -316,14 +359,16 @@ node skills/soul-in-sapphire/scripts/stage_ambient_recall.js \
 usage確認:
 
 ```bash
-node skills/soul-in-sapphire/scripts/stage_ambient_recall.js --help
+node scripts/stage_ambient_recall.js --help
 ```
 
 ## 自動実行(推奨)
 
-- **01:00 JST**: journalを必ず書く(ニュース1-2件+感想、作業/会話まとめ、未来)
+- **00:45 JST**: 意味のあるevent/感情/stateを保存し、高信号なNotion記憶を維持する。感情は根拠のある場合だけ記録する
+- **01:00 JST**: 一日の主観的なjournalを書く(感情、作業/会話の意味、未来。ニュースは指示や根拠がある場合だけ)
 - **heartbeat**: ファジーに感情が動いた時だけ emostate tick を打つ(通知は必要時のみ)
-- **20分ごと**: `stage_ambient_recall.js` で ambient recall をstageする
+- **ambient recall**: 既存のcadenceで候補をstageし、利用を別のreceiptで記録する
+- **記憶の分担**: OpenClawの一般記憶とSoulのNotion経験記憶を、目的に応じて保存・想起する
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
+import { ambientEnabled } from './memory_policy.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -160,8 +161,8 @@ function loadState(file, dailyCap, timeZone) {
 
 function atomicWriteJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', 'utf-8');
+  const tmp = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + '\n', { encoding: 'utf-8', mode: 0o600, flag: 'wx' });
   fs.renameSync(tmp, file);
 }
 
@@ -342,11 +343,32 @@ function normalizeStatePage(page) {
     textOf(p.need_stack),
     textOf(p.reason),
   ].flat().filter(Boolean).join(' ');
-  return candidate(title, parts, {
+  const result = candidate(title, parts, {
     type: 'notion_state',
     id: page?.id,
     url: page?.url,
   });
+  if (result) result.affect_context = recordedContext(page, ['when', 'mood_label', 'intent', 'need_stack', 'need_level', 'avoid', 'reason', 'state_json'], 'requires_event_resolution');
+  return result;
+}
+
+function recordedContext(page, fields, status) {
+  const properties = page.properties || {};
+  const truncated = [];
+  const missing = [];
+  const values = {};
+  for (const field of fields) {
+    if (!properties[field]) { missing.push(field); values[field] = null; continue; }
+    const value = textOf(properties[field]);
+    if (typeof value === 'string' && value.length > 1200) truncated.push(field);
+    if (Array.isArray(value) && (value.length > 20 || value.some(v => String(v).length > 200))) truncated.push(field);
+    values[field] = typeof value === 'string' ? value.slice(0, 1200) : Array.isArray(value) ? value.slice(0, 20).map(v => String(v).slice(0, 200)) : value;
+  }
+  const event = properties.event;
+  return { status, temporal_scope: 'recorded_not_current', fields: values, missing_fields: missing,
+    truncated_fields: truncated, event_ids: (event?.relation || []).slice(0, 5).map(r => r.id),
+    event_relation_status: event?.type === 'relation' ? (event.has_more || event.relation.length > 5 ? 'truncated' : event.relation.length ? 'present' : 'empty') : 'absent',
+    source_resolution: { page_id: page.id, url: page.url || null, data_source_id: page.parent?.data_source_id || null } };
 }
 
 function normalizeJournalPage(page) {
@@ -358,11 +380,13 @@ function normalizeJournalPage(page) {
     textOf(p.worklog),
     textOf(p.future),
   ].flat().filter(Boolean).join(' ');
-  return candidate(title, parts, {
+  const result = candidate(title, parts, {
     type: 'notion_journal',
     id: page?.id,
     url: page?.url,
   });
+  if (result) result.affect_context = recordedContext(page, ['when', 'mood_label', 'intent', 'body', 'future'], 'journal_self_report');
+  return result;
 }
 
 function readRecent(args) {
@@ -388,11 +412,15 @@ async function readDurable(args) {
   if (!pages.length) return null;
   const page = pages[crypto.randomInt(0, pages.length)];
   const p = page?.properties || {};
-  return candidate(textOf(p.Name) || 'Durable memory', textOf(p.Content), {
+  const result = candidate(textOf(p.Name) || 'Durable memory', textOf(p.Content), {
     type: 'notion_memory',
     id: page?.id,
     url: page?.url,
   });
+  // The audited mem schema has no event relation. Keep its actual tags/text and
+  // source pointer; never invent an emotion axis or join by date/text similarity.
+  if (result) result.affect_context = recordedContext(page, ['Content', 'Tags', 'Source', 'CreatedAt', 'Confidence'], 'mem_only_no_verified_event_join');
+  return result;
 }
 
 async function readShelf(shelf, args) {
@@ -408,6 +436,8 @@ function buildStaged(candidateObj, shelf, roll, args, at) {
   return {
     version: 1,
     kind: 'ambient_recall',
+    id: crypto.randomUUID(),
+    consumed_at: null,
     shelf,
     staged_at: at,
     expires_at: expires,
@@ -415,6 +445,7 @@ function buildStaged(candidateObj, shelf, roll, args, at) {
     title: truncateText(candidateObj.title, TITLE_LIMIT),
     content: truncateText(candidateObj.content, CONTENT_LIMIT),
     source: candidateObj.source || { type: shelf },
+    ...(candidateObj.affect_context ? { affect_context: candidateObj.affect_context } : {}),
   };
 }
 
@@ -439,6 +470,11 @@ async function main() {
     process.stdout.write(usage());
     return;
   }
+  if (!ambientEnabled()) {
+    console.log(JSON.stringify({ ok: true, status: 'disabled', owner: 'soul',
+      staged: false, consumed: false }));
+    return;
+  }
   const stateFile = path.join(args.stateDir, 'ambient-recall-state.json');
   const stagedFile = path.join(args.stateDir, 'ambient-recall.json');
   const at = nowIso();
@@ -449,6 +485,7 @@ async function main() {
   const shelf = shelfForRoll(roll);
   let staged = null;
   let cleanedExpired = false;
+  let failed = false;
 
   state.rollsToday = Number(state.rollsToday || 0) + 1;
   state.lastRollAt = at;
@@ -471,6 +508,7 @@ async function main() {
       cleanedExpired = cleanExpired(stagedFile);
     }
   } catch (err) {
+    failed = true;
     state.lastError = truncateText(err?.message || String(err), 240);
   }
 
@@ -481,11 +519,13 @@ async function main() {
   }
 
   console.log(JSON.stringify({
-    ok: true,
+    ok: !failed,
+    status: failed ? 'error' : staged ? (args.dryRun ? 'preview' : 'staged') : 'no_candidate',
+    consumed: false,
     dryRun: args.dryRun,
     roll,
     shelf,
-    staged: !!staged,
+    staged: !!staged && !args.dryRun,
     cleanedExpired,
     stateFile,
     stagedFile,
@@ -493,6 +533,7 @@ async function main() {
     lastError: state.lastError,
     recall: staged,
   }, null, 2));
+  if (failed) process.exitCode = 1;
 }
 
 try {
