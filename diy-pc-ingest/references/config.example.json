@@ -1,6 +1,5 @@
 {
   "notion": {
-    "api_key": "PUT_YOUR_NOTION_INTEGRATION_TOKEN_HERE_OR_USE_ENV",
     "version": "2025-09-03",
     "targets": {
       "pcconfig": {

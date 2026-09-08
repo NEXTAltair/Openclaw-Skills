@@ -1,14 +1,7 @@
-# Notion IDs (DIY_PC) - LOCAL ONLY
+# Notion target IDs
 
-⚠️ Do not publish this file with real IDs.
+Read target IDs from the local workspace `AGENTS.md` Tools section. Pass them to the JS CLI as `--<target>-dsid` and `--<target>-dbid`; it does not read config.json.
 
-Copy `references/config.example.json` to `~/.config/diy-pc-ingest/config.json` and put IDs there.
+To locate IDs, use the configured Notion integration to search tables and read their data sources. Use `data_source_id` for query/schema and creation parents. `database_id` is retained as an explicit target argument and for validating older page-parent responses.
 
-How to find IDs:
-- Create your Notion tables first (PCConfig/PCInput/ストレージ/エンクロージャー)
-- Use Notion API `POST /v1/search` with your integration token to locate each table
-- Then read the table's `data_source_id` (query/schema) and `database_id` (create page parent)
-
-Recommended:
-- Keep IDs in a local-only config file outside your repo.
-- Keep your Notion token in `NOTION_API_KEY` env or a secret manager.
+Keep real IDs and records outside the public repository. `config.example.json` is a reference for the legacy Python implementation only, not an active JS configuration. Provide auth through the host's protected SecretRef path; never paste secret values into commands or chat.

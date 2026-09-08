@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Apply JSONL records to DIY_PC Notion tables (JS version).
+ * Plan (default) or explicitly apply JSONL records to DIY_PC Notion tables (JS version).
  *
  * Deterministic upsert:
  * - reads JSONL from stdin
@@ -22,14 +22,7 @@ const path = require('path');
 const { execFileSync } = require('node:child_process');
 
 const DEFAULT_NOTION_VERSION = '2025-09-03';
-const DEFAULT_NOTIONCTL_PATH = path.resolve(__dirname, '..', '..', 'notion-api-automation', 'scripts', 'notionctl.mjs');
-const NOTION_AUTH_ENV_KEYS = ['NOTION_API_KEY', 'NOTION_TOKEN', 'NOTION_API_TOKEN', 'NOTION_API_KEY_FILE'];
-
-function die(msg) {
-  process.stderr.write(String(msg) + '\n');
-  process.exit(1);
-}
-
+const { isDeepStrictEqual } = require('node:util');
 // Target schema: title_prop and key arrays are schema-derived constants.
 const TARGET_SCHEMA = {
   pcconfig:  { title_prop: 'Name', key: ['Name', 'Purchase Date'] },
@@ -40,13 +33,18 @@ const TARGET_SCHEMA = {
 
 function parseArgs(argv) {
   const out = {};
+  const flags = new Set(['plan', 'dry-run', 'apply']);
+  const values = new Set(Object.keys(TARGET_SCHEMA).flatMap(t => [`${t}-dsid`, `${t}-dbid`]));
   for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    if (a.startsWith('--')) {
-      const k = a.slice(2);
-      out[k] = argv[++i] || '';
+    const k = argv[i].replace(/^--/, '');
+    if (!argv[i].startsWith('--') || (!flags.has(k) && !values.has(k))) throw new Error(`Unknown argument: ${argv[i]}`);
+    if (flags.has(k)) out[k] = true;
+    else {
+      if (!argv[i + 1] || argv[i + 1].startsWith('--')) throw new Error(`Missing value: --${k}`);
+      out[k] = argv[++i];
     }
   }
+  if (out.apply && (out.plan || out['dry-run'])) throw new Error('Choose plan/dry-run OR apply');
   return out;
 }
 
@@ -68,43 +66,23 @@ function notionVersion() {
   return (process.env.NOTION_VERSION || DEFAULT_NOTION_VERSION).trim();
 }
 
-function notionctlPath() {
-  return process.env.NOTIONCTL_PATH || DEFAULT_NOTIONCTL_PATH;
-}
-
-function redactKnownSecrets(text) {
-  let out = String(text || '');
-  for (const k of NOTION_AUTH_ENV_KEYS) {
-    const value = process.env[k];
-    if (!value || k.endsWith('_FILE')) continue;
-    out = out.split(String(value)).join(`[redacted:${k}]`);
+function notionctlPath(here = __dirname, override = process.env.NOTIONCTL_PATH) {
+  if (override) {
+    const explicit = override.startsWith('~/') ? path.join(require('node:os').homedir(), override.slice(2)) : override;
+    if (!fs.existsSync(explicit)) throw new Error('NOTIONCTL_PATH does not exist');
+    return explicit;
   }
-  return out;
-}
-
-function authSetupHint() {
-  return [
-    'Configure Notion auth with NOTION_API_KEY/NOTION_TOKEN,',
-    'or set skills.entries["diy-pc-ingest"].apiKey to an OpenClaw SecretRef.',
-    'The SecretRef provider can be env, file, exec, or another OpenClaw-supported secure provider.',
-  ].join(' ');
+  const parent = path.resolve(here, '../..');
+  const roots = [parent];
+  if (path.basename(parent).startsWith('@')) roots.push(path.dirname(parent));
+  const candidates = roots.map(root => path.join(root, 'notion-api-automation/scripts/notionctl.mjs'));
+  const found = candidates.find(p => fs.existsSync(p));
+  if (!found) throw new Error('notionctl not found; install notion-api-automation or set NOTIONCTL_PATH');
+  return found;
 }
 
 function safeEnv(extra = {}) {
-  const env = {
-    PATH: process.env.PATH || '',
-    HOME: process.env.HOME || '',
-    LANG: process.env.LANG || 'C.UTF-8',
-    LC_ALL: process.env.LC_ALL || '',
-    LC_CTYPE: process.env.LC_CTYPE || '',
-    SYSTEMROOT: process.env.SYSTEMROOT || '',
-    WINDIR: process.env.WINDIR || '',
-  };
-  for (const k of NOTION_AUTH_ENV_KEYS) {
-    if (process.env[k]) env[k] = process.env[k];
-  }
-  if (process.env.NOTIONCTL_PATH) env.NOTIONCTL_PATH = process.env.NOTIONCTL_PATH;
-  return { ...env, ...extra };
+  return { ...process.env, ...extra };
 }
 
 async function notionReq(method, apiPath, body) {
@@ -122,67 +100,39 @@ async function notionReq(method, apiPath, body) {
 
   let out = '';
   try {
-    out = execFileSync('node', args, { encoding: 'utf-8', env }).trim();
+    out = execFileSync('node', args, { encoding: 'utf-8', env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch (err) {
     const stdout = err?.stdout ? String(err.stdout).trim() : '';
     const stderr = err?.stderr ? String(err.stderr).trim() : '';
-    const message = err?.message ? String(err.message) : String(err);
-    const detail = redactKnownSecrets([stdout, stderr, message].filter(Boolean).join('\n'));
-    throw new Error(`notionctl api execution failed. ${authSetupHint()}${detail ? `\n${detail}` : ''}`);
+    if ([stdout, stderr].some(v => v.includes('Unknown command: api'))) {
+      throw new Error('Incompatible notionctl: update notion-api-automation to a version supporting api');
+    }
+    // Do not echo command arguments or API bodies (they may contain private records).
+    throw new Error('notionctl request failed or was rejected; cause unknown. Stop and inspect protected host diagnostics.');
   }
   const obj = out ? JSON.parse(out) : {};
-  if (!obj.ok) throw new Error(`notionctl api not ok. ${authSetupHint()}\n${redactKnownSecrets(out)}`);
+  if (obj.isError || !obj.ok || obj.result?.isError || obj.result?.object === 'error') {
+    throw new Error('notionctl returned an error or rejection; cause unknown. No alternate-route retry.');
+  }
   return obj.result || {};
 }
 
-function normalize(s) {
-  return String(s ?? '').trim().replace(/\s+/g, ' ');
-}
-
-function propPlainText(prop) {
-  if (!prop) return '';
-  const t = prop.type;
-  if (t === 'title' || t === 'rich_text') {
-    const arr = prop[t] || [];
-    return arr.map(x => x?.plain_text || '').join('').trim();
+async function queryAll(req, ds, filter) {
+  const rows = [];
+  let cursor;
+  const seen = new Set();
+  for (let page = 0; page < 100; page++) {
+    const j = await req('POST', `/data_sources/${ds}/query`, {
+      page_size: 100, filter, ...(cursor ? { start_cursor: cursor } : {}),
+    });
+    if (!Array.isArray(j.results)) throw new Error('Invalid query response');
+    rows.push(...j.results);
+    if (!j.has_more) return rows;
+    if (!j.next_cursor || seen.has(j.next_cursor)) throw new Error('Incomplete query pagination');
+    cursor = j.next_cursor;
+    seen.add(cursor);
   }
-  return '';
-}
-
-function propDateStart(prop) {
-  if (!prop || prop.type !== 'date') return null;
-  return prop.date?.start ?? null;
-}
-
-function propNumber(prop) {
-  if (!prop || prop.type !== 'number') return null;
-  return prop.number;
-}
-
-function getValueFromRow(row, propName) {
-  const props = row?.properties || {};
-  const p = props[propName];
-  if (!p) return null;
-  const t = p.type;
-  if (t === 'title' || t === 'rich_text') return propPlainText(p);
-  if (t === 'date') return propDateStart(p);
-  if (t === 'number') return propNumber(p);
-  if (t === 'select') return p.select?.name ?? null;
-  if (t === 'status') return p.status?.name ?? null;
-  if (t === 'url') return p.url ?? null;
-  return null;
-}
-
-async function queryByTitle(dataSourceId, titleProp, contains, pageSize = 10) {
-  const body = { page_size: pageSize, filter: { property: titleProp, title: { contains } } };
-  const j = await notionReq('POST', `/data_sources/${dataSourceId}/query`, body);
-  return j.results || [];
-}
-
-async function queryByRichText(dataSourceId, prop, contains, pageSize = 10) {
-  const body = { page_size: pageSize, filter: { property: prop, rich_text: { contains } } };
-  const j = await notionReq('POST', `/data_sources/${dataSourceId}/query`, body);
-  return j.results || [];
+  throw new Error('Query limit exceeded; narrow input before writing');
 }
 
 function buildProp(schemaProp, value) {
@@ -190,13 +140,14 @@ function buildProp(schemaProp, value) {
   if (!t) return null;
 
   if (t === 'title') {
-    return { title: [{ type: 'text', text: { content: String(value) } }] };
+    return { title: [{ type: 'text', text: { content: String(value ?? '') } }] };
   }
   if (t === 'rich_text') {
-    return { rich_text: [{ type: 'text', text: { content: String(value) } }] };
+    return { rich_text: [{ type: 'text', text: { content: String(value ?? '') } }] };
   }
   if (t === 'number') {
     if (value === null || value === undefined || value === '') return { number: null };
+    if (!Number.isFinite(Number(value))) throw new Error('Invalid numeric value');
     return { number: Number(value) };
   }
   if (t === 'date') {
@@ -237,7 +188,7 @@ function patchSkipsExisting(ep) {
   const et = ep.type;
   if (et === 'rich_text' || et === 'title') {
     const arr = ep[et] || [];
-    return arr.some(x => (x?.plain_text || '').trim());
+    return arr.some(x => (x?.plain_text ?? x?.text?.content ?? '').trim());
   }
   if (et === 'number') return ep.number !== null && ep.number !== undefined;
   if (et === 'date') return Boolean(ep.date?.start);
@@ -255,7 +206,8 @@ function buildPatch(schema, incoming, existingProps, overwrite) {
   const schProps = schema?.properties || {};
 
   for (const [k, v] of Object.entries(incoming || {})) {
-    if (!(k in schProps)) continue;
+    if (v === undefined) continue;
+    if (!(k in schProps)) throw new Error(`Unknown property: ${k}`);
     const schemaProp = schProps[k];
 
     if (!overwrite) {
@@ -264,118 +216,59 @@ function buildPatch(schema, incoming, existingProps, overwrite) {
     }
 
     const built = buildProp(schemaProp, v);
-    if (built !== null) out[k] = built;
+    if (built === null) throw new Error(`Unsupported property: ${k}`);
+    if (!isDeepStrictEqual(canonical(existingProps?.[k], schemaProp.type), canonical(built, schemaProp.type))) out[k] = built;
   }
 
   return out;
 }
 
-async function findExisting(ids, target, schema, propsIn) {
-  const tcfg = ids[target];
-  const ds = tcfg.data_source_id;
-  const schProps = schema?.properties || {};
-  const keyProps = Array.from(tcfg.key || []);
-
-  // composite key
-  if (keyProps.length >= 2 && keyProps.every(k => propsIn?.[k])) {
-    const first = keyProps[0];
-    const firstSchema = schProps[first] || {};
-    const firstType = firstSchema.type;
-    const firstVal = normalize(propsIn[first]);
-
-    let hits = [];
-    if (firstType === 'title') hits = await queryByTitle(ds, first, firstVal, 25);
-    else if (firstType === 'rich_text') hits = await queryByRichText(ds, first, firstVal, 25);
-
-    const narrowed = hits.filter(row => {
-      for (const k of keyProps) {
-        const wantRaw = propsIn[k];
-        if (wantRaw === null || wantRaw === undefined || wantRaw === '') return false;
-        const got = getValueFromRow(row, k);
-        const want = typeof wantRaw === 'string' ? normalize(wantRaw) : String(wantRaw);
-        const gotN = typeof got === 'string' ? normalize(got) : (got === null || got === undefined ? null : String(got));
-        if (gotN !== want) return false;
-      }
-      return true;
-    });
-
-    if (narrowed.length === 1) return narrowed[0];
-    return null;
-  }
-
-  // single-key legacy
-  for (const keyProp of keyProps) {
-    const v0 = propsIn?.[keyProp];
-    if (!v0) continue;
-    const v = normalize(v0);
-    if (!v) continue;
-    const schemaProp = schProps[keyProp];
-    if (!schemaProp) continue;
-
-    let hits = [];
-    if (schemaProp.type === 'rich_text') hits = await queryByRichText(ds, keyProp, v, 10);
-    else if (schemaProp.type === 'title') hits = await queryByTitle(ds, keyProp, v, 10);
-
-    if (hits.length === 1) return hits[0];
-  }
-
-  // storage safe fallback: title + (optional) purchase date/price
-  if (target === 'storage') {
-    const title = propsIn?.Name || propsIn?.名前;
-    if (!title) return null;
-    const titleN = normalize(title);
-    const hits = await queryByTitle(ds, tcfg.title_prop, titleN, 10);
-    if (!hits || hits.length === 0) return null;
-
-    const wantDate = propsIn?.['購入日'];
-    const wantPrice = propsIn?.['価格(円)'];
-
-    function ok(row) {
-      const props = row?.properties || {};
-      if (wantDate) {
-        const got = propDateStart(props['購入日']);
-        if (String(got) !== String(wantDate)) return false;
-      }
-      if (wantPrice !== null && wantPrice !== undefined) {
-        const got = propNumber(props['価格(円)']);
-        if (got === null || got === undefined) return false;
-        if (Number(got) !== Number(wantPrice)) return false;
-      }
-      return true;
-    }
-
-    const narrowed = hits.filter(ok);
-    if (narrowed.length === 1) return narrowed[0];
-
-    if (hits.length === 1) {
-      const serial = propPlainText((hits[0].properties || {})['シリアル']);
-      if (!serial) return hits[0];
-    }
-  }
-
-  return null;
+function canonical(prop, type) {
+  if (type === 'title' || type === 'rich_text') return (prop?.[type] || []).map(x => x.plain_text ?? x.text?.content ?? '').join('');
+  if (type === 'select' || type === 'status') return prop?.[type]?.name ?? null;
+  if (type === 'relation') return (prop?.relation || []).map(x => x.id.replace(/-/g, '')).sort();
+  if (type === 'multi_select') return (prop?.multi_select || []).map(x => x.name).sort();
+  if (type === 'date') return prop?.date ? { start: prop.date.start, end: prop.date.end ?? null, time_zone: prop.date.time_zone ?? null } : null;
+  return prop?.[type] ?? null;
 }
 
-async function createPage(ids, target, schema, title, properties) {
-  const tcfg = ids[target];
-  const titleProp = tcfg.title_prop;
-  const schProps = schema?.properties || {};
-
-  const outProps = {};
-  if (title) {
-    if (schProps[titleProp]) outProps[titleProp] = buildProp(schProps[titleProp], title);
-    else if (schProps['Name']) outProps['Name'] = buildProp(schProps['Name'], title);
+function unique(rows, key) {
+  if (rows.length > 1) {
+    const err = new Error('Ambiguous key: multiple matching rows');
+    err.details = { key, matches: rows.map(r => r.id) };
+    throw err;
   }
+  return rows[0] || null;
+}
 
-  for (const [k, v] of Object.entries(properties || {})) {
-    if (k === titleProp) continue;
-    if (!(k in schProps)) continue;
-    const built = buildProp(schProps[k], v);
-    if (built !== null) outProps[k] = built;
+async function findExisting(ids, target, schema, propsIn, req = notionReq) {
+  const cfg = ids[target];
+  const filled = k => propsIn[k] !== null && propsIn[k] !== undefined && propsIn[k] !== '';
+  let keys;
+  if (target === 'pcconfig' || target === 'pcinput') keys = cfg.key;
+  else if (target === 'enclosure') keys = [filled('取り外し表示名') ? '取り外し表示名' : cfg.title_prop];
+  else keys = ['シリアル'];
+  if (!keys.every(filled)) {
+    const err = new Error('Missing upsert key');
+    err.details = { missing: keys.filter(k => !filled(k)) };
+    throw err;
   }
-
-  const body = { parent: { database_id: tcfg.database_id }, properties: outProps };
-  return await notionReq('POST', '/pages', body);
+  const filters = keys.map(k => {
+    const type = schema.properties?.[k]?.type;
+    if (!['title', 'rich_text', 'date', 'number'].includes(type)) throw new Error(`Unsupported key schema: ${k}`);
+    return { property: k, [type]: { equals: propsIn[k] } };
+  });
+  const key = Object.fromEntries(keys.map(k => [k, propsIn[k]]));
+  const exact = unique(await queryAll(req, cfg.data_source_id, filters.length === 1 ? filters[0] : { and: filters }), key);
+  if (exact || target !== 'storage' || !propsIn.Name) return { row: exact, key };
+  // Serial post-fill is allowed only for an exact title with an empty serial.
+  const fallback = [
+    { property: cfg.title_prop, title: { equals: propsIn.Name } },
+    { property: 'シリアル', rich_text: { is_empty: true } },
+  ];
+  if (filled('購入日')) fallback.push({ property: '購入日', date: { equals: propsIn['購入日'] } });
+  if (filled('価格(円)')) fallback.push({ property: '価格(円)', number: { equals: propsIn['価格(円)'] } });
+  return { row: unique(await queryAll(req, cfg.data_source_id, { and: fallback }), key), key };
 }
 
 function requireIds(ids, target) {
@@ -384,135 +277,145 @@ function requireIds(ids, target) {
   if (!t.data_source_id) missing.push(`--${target}-dsid`);
   if (!t.database_id) missing.push(`--${target}-dbid`);
   if (missing.length) {
-    die(`Missing Notion IDs: ${missing.join(', ')}. Check the workspace AGENTS.md ## Tools section for the values.`);
+    throw new Error(`Missing Notion IDs: ${missing.join(', ')}. Check the workspace AGENTS.md ## Tools section for the values.`);
   }
+}
+
+// Every read/write is routed through this checked transport, including mocks.
+async function checked(req, method, endpoint, body) {
+  const r = await req(method, endpoint, body);
+  if (!r || r.isError || r.ok === false || r.object === 'error') throw new Error('Request failed or rejected; cause unknown');
+  return r;
+}
+
+function expandRecords(records) {
+  return records.flatMap((rec, index) => {
+    const primary = { ...rec, index, lane: 'primary' };
+    if (!rec.mirror_to_pcconfig) return [primary];
+    const p = rec.properties || {};
+    const missing = ['現在の接続先PC', '購入日', 'Name'].filter(k => !p[k]);
+    return [primary, {
+      target: 'pcconfig', index, lane: 'mirror',
+      invalid: rec.target !== 'storage' || rec.archive || rec.archived ? 'Invalid mirror request' : (missing.length ? 'Missing mirror fields' : null),
+      missing,
+      properties: { PC: p['現在の接続先PC'], Category: 'ストレージ', Name: p.Name,
+        'Purchase Date': p['購入日'], 'Purchase Vendor': p['購入店'], 'Purchase Price': p['価格(円)'],
+        Spec: `S/N: ${p['シリアル'] || ''}`, Installed: true, Active: true, Notes: 'mirrored from storage' },
+    }];
+  });
+}
+
+async function planRecord(rec, ids, req) {
+  if (rec.invalid) {
+    const e = new Error(rec.invalid); e.details = { missing: rec.missing }; throw e;
+  }
+  if (!Object.hasOwn(TARGET_SCHEMA, rec.target)) throw new Error('Unknown target');
+  requireIds(ids, rec.target);
+  const cfg = ids[rec.target];
+  const schema = await req('GET', `/data_sources/${cfg.data_source_id}`);
+  if (!schema.properties) throw new Error('Invalid schema response');
+  const props = { ...rec.properties };
+  if (rec.title && !props[cfg.title_prop]) props[cfg.title_prop] = rec.title;
+  const pageId = rec.page_id || rec.id;
+  const archive = Boolean(rec.archive || rec.archived);
+  let existing, key;
+  if (pageId) {
+    existing = await req('GET', `/pages/${pageId}`);
+    const parent = existing.parent || {};
+    const same = (a, b) => a && b && a.replace(/-/g, '') === b.replace(/-/g, '');
+    if (!(same(parent.data_source_id, cfg.data_source_id) || same(parent.database_id, cfg.database_id))) throw new Error('Page does not belong to configured target');
+    key = { page_id: pageId };
+  } else {
+    ({ row: existing, key } = await findExisting(ids, rec.target, schema, props, req));
+  }
+  if (archive && !existing) throw new Error('Cannot archive a missing row');
+  if (existing && !existing.id) throw new Error('Invalid page response');
+  if (existing?.archived && Object.keys(props).length) throw new Error('Cannot edit archived page');
+  if (!existing && !props[cfg.title_prop]) throw new Error('Missing title for creation');
+  const patch = buildPatch(schema, props, existing?.properties || {}, Boolean(rec.overwrite));
+  const body = {};
+  if (Object.keys(patch).length) body.properties = patch;
+  if (archive && !existing.archived) body.archived = true;
+  if (!existing) body.parent = { type: 'data_source_id', data_source_id: cfg.data_source_id };
+  const action = !existing ? 'create' : body.archived ? 'archive' : Object.keys(patch).length ? 'update' : 'skip';
+  const before = {}, after = {};
+  for (const [k, v] of Object.entries(patch)) {
+    before[k] = canonical(existing?.properties?.[k], schema.properties[k].type);
+    after[k] = canonical(v, schema.properties[k].type);
+  }
+  if (archive) { before.archived = Boolean(existing?.archived); after.archived = true; }
+  return { index: rec.index, lane: rec.lane, target: rec.target, key, action,
+    id: existing?.id, url: existing?.url, before, after, body, schema };
+}
+
+function publicPlan(p) {
+  const { schema, ...visible } = p;
+  return visible;
+}
+
+async function run(records, ids, mode = 'plan', transport = notionReq) {
+  if (!['plan', 'apply'].includes(mode)) throw new Error('Invalid mode');
+  const req = (method, endpoint, body) => {
+    if (mode === 'plan' && !(method === 'GET' || (method === 'POST' && /^\/data_sources\/[^/]+\/query$/.test(endpoint)))) throw new Error('Plan write blocked');
+    return checked(transport, method, endpoint, body);
+  };
+  const expanded = expandRecords(records);
+  const plans = [], results = [];
+  // Preflight the whole batch before any mutation: ambiguity/missing fields block all writes.
+  for (const rec of expanded) {
+    try { plans.push(await planRecord(rec, ids, req)); }
+    catch (e) { plans.push({ index: rec.index, lane: rec.lane, target: rec.target, action: 'blocked', error: e.message, ...e.details }); }
+  }
+  const blocked = plans.some(p => p.action === 'blocked');
+  if (mode === 'plan' || blocked) {
+    for (const p of plans) results.push({ ...publicPlan(p), status: p.action === 'blocked' ? 'blocked' : blocked ? 'not_executed' : 'planned' });
+  } else {
+    let stopped = false;
+    for (let i = 0; i < expanded.length; i++) {
+      if (stopped) { results.push({ ...publicPlan(plans[i]), status: 'not_executed' }); continue; }
+      let p = plans[i], writtenId;
+      let writeAttempted = false;
+      try {
+        // Re-read after prior operations so duplicate input and resumed runs become skips.
+        p = await planRecord(expanded[i], ids, req);
+        if (p.action === 'skip') { results.push({ ...publicPlan(p), status: 'skipped' }); continue; }
+        writeAttempted = true;
+        const response = await req(p.action === 'create' ? 'POST' : 'PATCH', p.action === 'create' ? '/pages' : `/pages/${p.id}`, p.body);
+        writtenId = response.id;
+        if (!writtenId || (p.id && p.id !== writtenId)) throw new Error('Invalid write response; outcome unverified');
+        const row = await req('GET', `/pages/${writtenId}`);
+        if (row.id !== writtenId) throw new Error('Read-back page mismatch');
+        for (const [k, v] of Object.entries(p.body.properties || {})) {
+          if (row.properties?.[k]?.has_more || !isDeepStrictEqual(canonical(row.properties?.[k], p.schema.properties[k].type), canonical(v, p.schema.properties[k].type))) throw new Error('Read-back verification failed');
+        }
+        if (p.body.archived && !row.archived) throw new Error('Archive verification failed');
+        results.push({ ...publicPlan(p), id: writtenId, url: row.url, status: 'applied' });
+      } catch (e) {
+        results.push({ ...publicPlan(p), id: writtenId || p.id, status: 'failed', write_attempted: writeAttempted,
+          outcome: writeAttempted ? 'unverified' : 'not_written', error: e.message, ...e.details });
+        stopped = true;
+      }
+    }
+  }
+  const summary = { planned: 0, created: 0, updated: 0, archived: 0, skipped: 0, blocked: 0, failed: 0, not_executed: 0 };
+  for (const r of results) {
+    if (r.status === 'applied') summary[{ create: 'created', update: 'updated', archive: 'archived' }[r.action]]++;
+    else summary[r.status]++;
+  }
+  return { mode, ok: !summary.failed && !summary.blocked, summary, results };
 }
 
 async function main() {
   const args = parseArgs(process.argv);
-  const ids = idsFromArgs(args);
-
-  const raw = fs.readFileSync(0, 'utf-8');
-  const lines = raw.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  if (!lines.length) {
-    console.log('NO_RECORDS');
-    return;
-  }
-
-  const records = lines.map(l => JSON.parse(l));
-  const cacheSchema = {};
-
-  const summary = { created: 0, updated: 0, skipped: 0, errors: 0 };
-  const results = [];
-
-  for (const rec of records) {
-    const target = rec.target;
-    if (!ids[target]) {
-      summary.errors += 1;
-      results.push({ error: `unknown target: ${target}`, record: rec });
-      continue;
-    }
-
-    requireIds(ids, target);
-
-    const overwrite = Boolean(rec.overwrite);
-    const pageId = rec.page_id || rec.id;
-    const archive = Boolean(rec.archive || rec.archived);
-
-    if (!cacheSchema[target]) {
-      cacheSchema[target] = await notionReq('GET', `/data_sources/${ids[target].data_source_id}`);
-    }
-    const schema = cacheSchema[target];
-
-    const title = rec.title || rec.properties?.Name || rec.properties?.名前;
-    const propsIn = rec.properties || {};
-
-    // direct page update
-    if (pageId) {
-      const existingPage = await notionReq('GET', `/pages/${pageId}`);
-      const patch = buildPatch(schema, propsIn, existingPage.properties || {}, overwrite);
-      const body = {};
-      if (Object.keys(patch).length) body.properties = patch;
-      if (archive) body.archived = true;
-
-      if (Object.keys(body).length) {
-        const updated = await notionReq('PATCH', `/pages/${pageId}`, body);
-        summary.updated += 1;
-        results.push({ action: 'updated', target, id: updated.id, url: updated.url });
-      } else {
-        summary.skipped += 1;
-        results.push({ action: 'skipped', target, id: existingPage.id, url: existingPage.url });
-      }
-      continue;
-    }
-
-    const existing = await findExisting(ids, target, schema, propsIn);
-    if (existing) {
-      const patch = buildPatch(schema, propsIn, existing.properties || {}, overwrite);
-      if (Object.keys(patch).length) {
-        const updated = await notionReq('PATCH', `/pages/${existing.id}`, { properties: patch });
-        summary.updated += 1;
-        results.push({ action: 'updated', target, id: updated.id, url: updated.url });
-      } else {
-        summary.skipped += 1;
-        results.push({ action: 'skipped', target, id: existing.id, url: existing.url });
-      }
-    } else {
-      const created = await createPage(ids, target, schema, String(title || '(untitled)'), propsIn);
-      summary.created += 1;
-      results.push({ action: 'created', target, id: created.id, url: created.url });
-    }
-
-    // mirror storage -> pcconfig
-    if (target === 'storage' && rec.mirror_to_pcconfig) {
-      const pc = propsIn['現在の接続先PC'];
-      const purchaseDate = propsIn['購入日'];
-      const name = propsIn['Name'];
-      if (!(pc && purchaseDate && name)) {
-        summary.skipped += 1;
-        results.push({ action: 'skipped', target: 'pcconfig', reason: 'mirror_missing_fields' });
-      } else {
-        requireIds(ids, 'pcconfig');
-        if (!cacheSchema.pcconfig) {
-          cacheSchema.pcconfig = await notionReq('GET', `/data_sources/${ids.pcconfig.data_source_id}`);
-        }
-        const pcSchema = cacheSchema.pcconfig;
-        const pcProps = {
-          PC: pc,
-          Category: 'ストレージ',
-          Name: String(name),
-          'Purchase Date': String(purchaseDate),
-          'Purchase Vendor': propsIn['購入店'],
-          'Purchase Price': propsIn['価格(円)'],
-          Spec: `S/N: ${propsIn['シリアル'] || ''}`,
-          Installed: true,
-          Active: true,
-          Notes: 'mirrored from storage',
-        };
-        const pcExisting = await findExisting(ids, 'pcconfig', pcSchema, pcProps);
-        if (pcExisting) {
-          const pcPatch = buildPatch(pcSchema, pcProps, pcExisting.properties || {}, false);
-          if (Object.keys(pcPatch).length) {
-            const pcUpdated = await notionReq('PATCH', `/pages/${pcExisting.id}`, { properties: pcPatch });
-            summary.updated += 1;
-            results.push({ action: 'updated', target: 'pcconfig', id: pcUpdated.id, url: pcUpdated.url, reason: 'mirrored' });
-          } else {
-            summary.skipped += 1;
-            results.push({ action: 'skipped', target: 'pcconfig', id: pcExisting.id, url: pcExisting.url, reason: 'mirrored_no_changes' });
-          }
-        } else {
-          const pcCreated = await createPage(ids, 'pcconfig', pcSchema, String(name), pcProps);
-          summary.created += 1;
-          results.push({ action: 'created', target: 'pcconfig', id: pcCreated.id, url: pcCreated.url, reason: 'mirrored' });
-        }
-      }
-    }
-  }
-
-  console.log(JSON.stringify({ summary, results }, null, 2));
+  const records = fs.readFileSync(0, 'utf8').split(/\r?\n/).filter(s => s.trim()).map(s => JSON.parse(s));
+  const result = await run(records, idsFromArgs(args), args.apply ? 'apply' : 'plan');
+  console.log(JSON.stringify(result, null, 2));
+  if (!result.ok) process.exitCode = 1;
 }
 
-main().catch(err => {
-  process.stderr.write(String(err?.message || err) + '\n');
-  process.exit(1);
+module.exports = { run, parseArgs, idsFromArgs, notionctlPath, notionReq };
+if (require.main === module) main().catch(() => {
+  // Parsing may include private input fragments; don't echo those exceptions.
+  console.error('Invalid input or configuration. Check JSONL, mode flags and target IDs.');
+  process.exitCode = 1;
 });

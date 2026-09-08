@@ -25,7 +25,7 @@ Discordなどに貼り付けたPCパーツ購入ログ/メモを、OpenClaw経�
 このスキルのNotion運用/デバッグ用依存は、ClawHubの `notion-api-automation` です。
 
 - 推奨インストール: `clawhub install notion-api-automation`
-- 同梱の `scripts/notion_apply_records.js` は単体でも動作しますが、Notion APIの疎通確認/調査には `notionctl.mjs` が便利です
+- `scripts/notion_apply_records.js` は依存スキルの `notionctl.mjs api` を使用します。単体では通信できません。
 
 ### 1) Notion Integration を作る
 
@@ -134,11 +134,7 @@ clawhub install notion-api-automation
 
 ### 2) トークン(APIキー)を用意
 
-従来どおり環境変数で渡せます。
-
-```bash
-export NOTION_API_KEY="<your notion token>"
-```
+ホストの保護された認証設定を使います。秘密値をチャット、コマンド、ログへ貼り付けないでください。
 
 OpenClawでは `skills.entries["diy-pc-ingest"].apiKey` に設定する方法も使えます。
 `apiKey` はこのskillの `primaryEnv` である `NOTION_API_KEY` として実行時に注入されます。
@@ -158,56 +154,38 @@ SecretRef provider はユーザー環境ごとに異なるため、このskill�
 
 `source` は `env` / `file` / `exec` など、OpenClaw Gatewayで設定済みのSecretRef providerに合わせてください。
 
-### 3) NotionのIDを自動検出して設定(推奨)
+### 3) 対象IDを指定
 
-Notionの `data_source_id` / `database_id` は、Integrationがアクセスできる範囲なら検索で取得できます。
-このスキルには初期設定用スクリプトが同梱されているので、通常は手でIDを書く必要はありません。
-
-```bash
-cd skills/diy-pc-ingest
-
-# NOTION_API_KEY env、またはOpenClaw apiKey SecretRef注入が有効な状態で実行
-node scripts/bootstrap_config.js
-```
-
-これで `~/.config/diy-pc-ingest/config.json` が生成されます。
-
-DB名が環境で違う場合は `--names` で指定できます:
-
-```bash
-node scripts/bootstrap_config.js --names   pcconfig=PCConfig   pcinput=PCInput   storage=ストレージ   enclosure=エンクロージャー
-```
-
-### 3b) 手動設定(うまく検出できない場合)
-
-検索に出ない/同名が複数ある等で失敗する場合は、テンプレをコピーして手で埋めてください。
-
-- テンプレ: `references/config.example.json`
-- 配置先: `~/.config/diy-pc-ingest/config.json`
-
-```bash
-mkdir -p ~/.config/diy-pc-ingest
-cp references/config.example.json ~/.config/diy-pc-ingest/config.json
-```
-
-`config.json` の以下を埋めます:
-- `notion.targets.*.data_source_id`
-- `notion.targets.*.database_id`
-
+ワークスペースの `AGENTS.md` 内 `DIY-PC Notion Targets` を確認し、対象ごとの `--<target>-dsid` / `--<target>-dbid` を指定します。自動検出スクリプトやconfig.json読み込みはありません。
 
 ## 使い方
 
-このスキルのコア処理は `scripts/notion_apply_records.js` です。
+インストール先の `SKILL.md` があるディレクトリから実行します。`@owner` 付きの導入にも対応します。依存は同階層、続いてowner外のskillsルートから解決します。`NOTIONCTL_PATH` の明示指定が最優先です。
 
-### JSONLを適用(手動)
+### 2.1.0: 既定動作はplan
 
 ```bash
-cd skills/diy-pc-ingest
-
-node scripts/notion_apply_records.js <<'JSONL'
-{"target":"storage","properties":{"Name":"Samsung 970 EVO Plus 1TB (MZ-V7S1T0B/IT)","購入日":"2021-11-21","購入店":"JoshinWeb","価格(円)":14980,"型番":"MZ-V7S1T0B/IT","メモ":"Serial未入力"}}
-JSONL
+node scripts/notion_apply_records.js --plan --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
+node scripts/notion_apply_records.js --apply --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
 ```
+
+`--dry-run` もplanです。モード省略でも書き込みません。mirrorにはPCConfigのIDも指定します。JSONL例:
+
+```json
+{"target":"storage","properties":{"Name":"Example SSD","シリアル":"EXAMPLE-001","メモ":"購入記録"}}
+```
+
+入力/結果は個人情報を含むため、リポジトリ外で扱います。
+
+- plan: 対象、キー、create/update/archive/skip、変更前後を表示。読み取りとqueryのみで書き込み0件。
+- 重複キー、キー不足、未知のプロパティ、取得不完全はblocked。apply前の全件照合で書き込みを止めます。
+- apply: 各操作前に再照合し、変更後を読み戻して一致したものだけappliedに計上。失敗後は残りをnot_executedとして停止。
+- 成功/skip/失敗/未実行を確認してから日次メモや進捗を記録。部分成功を全体成功とは扱いません。
+- 拒否時に別経路へ切り替えません。原因不明は不明のまま報告。問題解決後の再開では現状を再取得し、成功済み行を再作成せず未反映分をplanします。
+- 既存のユーザー承認範囲内で不要な再承認を求めません。未承認のarchive/overwriteや曖昧な個体同定は確認します。
+- Notion側に一意制約/トランザクションはありません。同じキーの同時実行を避けてください。
+
+詳細なキー条件、JSONL、再開手順は [SKILL.md](SKILL.md) を参照してください。
 
 ### オプション(運用向け)
 

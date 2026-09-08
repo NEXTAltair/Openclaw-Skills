@@ -1,7 +1,7 @@
 ---
 name: "diy-pc-ingest"
 description: "Ingest pasted PC parts receipts or specs into Notion DIY_PC tables with classification, enrichment, follow-up, and upsert."
-metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTION_API_KEY_FILE","NOTION_VERSION","NOTIONCTL_PATH"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
+metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTION_VERSION","NOTIONCTL_PATH"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
 ---
 
 # diy-pc-ingest
@@ -27,7 +27,7 @@ clawhub install notion-api-automation
 - OpenClaw config: `skills.entries["diy-pc-ingest"].apiKey`
 
 `apiKey` is associated with `metadata.openclaw.primaryEnv` and is injected as
-`NOTION_API_KEY` for the host agent run. It may be a plaintext value or any
+`NOTION_API_KEY` for the host agent run. Use an
 OpenClaw SecretRef supported by the local gateway (`env`, `file`, `exec`, etc.).
 Do not hardcode provider-specific secret paths in this shared skill.
 
@@ -48,7 +48,11 @@ Example SecretRef shape:
 Notes:
 - This skill uses Notion-Version `2025-09-03` by default.
 - If `NOTIONCTL_PATH` is set, `scripts/notion_apply_records.js` uses that
-  notionctl path; otherwise it uses the sibling `notion-api-automation` skill.
+  notionctl path (missing overrides fail without fallback). Otherwise resolve a sibling
+  dependency, then the unscoped skills root for owner-qualified installs.
+- The dependency must support `api --compact --method --path --body-json` and
+  return `{ok:true,result:...}`. Preserve host-injected auth/proxy environment;
+  never extract credentials into chat, commands, logs or shell variables.
 
 ## Data flow disclosure
 
@@ -83,32 +87,34 @@ IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS
    - **PCConfig**: Identifier/型番 missing but needed to match existing row → ask.
 - If a key collides with multiple rows, do not write; ask user.
 
-5) **Search existing records in Notion** using `scripts/notion_apply_records.js` (auto-discovery mode):
-   - Provide JSONL records (one per item) on stdin.
-   - Script will:
-     - find an existing row by key (see below)
-     - report what would be created/updated/skipped without making changes
-     - **Do not write anything** (no create/update operations)
-   - Use this to preview results before actual upsert.
+5) **Plan using live reads** with `scripts/notion_apply_records.js --plan` (`--dry-run` is an alias; no mode also defaults to plan). Feed JSONL on stdin and explicit target IDs. Plan covers direct updates, upserts, archive and storage mirrors without write requests. Inspect each target/key/action, before/after, and blocked diagnostics. Missing keys/schema fields or multiple matches block the entire apply preflight; resolve them before applying.
 
-6) **Review search results** and confirm with user:
-   - Show what would be created/updated/skipped
-   - Ask for confirmation before proceeding to actual upsert
+6) **Review scope** against the user's existing authorization. Proceed without redundant approval for already-authorized changes. Ask only for unresolved identity/values or a concrete operation outside that scope, especially archive/overwrite. A plan is not authorization.
 
-7) **Upsert into Notion** using `scripts/notion_apply_records.js`:
-   - Provide JSONL records (one per item) on stdin.
-   - Script will:
-     - find an existing row by key (see below)
-     - patch only missing fields unless `overwrite=true`
-     - otherwise create a new row
+7) **Apply** the same JSONL with `--apply` and the same IDs. Apply re-reads the current ledger, preflights the whole batch, and rechecks each operation before writing. It fills empty fields unless `overwrite=true`; identical values are skipped even with overwrite. The plan is a preview, not an immutable transaction: do not run concurrent ingests for the same keys.
 
-8) Report results (created/updated/skipped) and link any created rows.
-3
+8) **Inspect results, verify, then record success**. Only `status:applied` counts as success after page read-back; `skipped` is unchanged. Keep `blocked`, `failed` and `not_executed` separate. Exit 1 / `ok:false` means the batch is not fully successful. A failed write/read-back can have an unverified remote effect; retain its ID if returned and reconcile before retrying. Never mark daily memory/progress complete before inspecting results.
+
+9) **Stop on rejection** from either CLI or connector (`isError`, `ok:false`, exception or tool refusal). Do not switch tools/auth/routes to bypass it. Report only the returned reason; unknown causes stay unknown. For authorized resumption after the refusal/blocker is resolved, search/read the current original and replacement rows again, plan only pending changes, and avoid recreating already-created rows. Report skill implementation/deployment separately from the original ledger task's completion.
+
+## Commands
+
+Run from the installed skill directory identified by `SKILL.md` (including owner-qualified paths). Keep private input and plan output outside the repository.
+
+```bash
+node scripts/notion_apply_records.js --plan --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
+node scripts/notion_apply_records.js --apply --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
+```
+
+Add `--pcconfig-dsid` / `--pcconfig-dbid` for mirrors. The script reads no config file and does not auto-discover database IDs.
+
 ## Upsert keys (rules)
 
 - **ストレージ**: `シリアル` (exact) is the primary key. If the existing row was created without serial, allow a safe fallback match by title + (optional) `購入日`/`価格(円)` to support post-fill of serial/health/scan-date.
 - **エンクロージャー**: `取り外し表示名` (exact) else title/name.
 - **PCConfig**: `(Name + Purchase Date)` を複合キーとして扱う（exact）。重複ヒット時は書き込まず質問。
+- **PCInput**: `(型番 + Serial + 名前)` is a required composite key.
+- Required keys must be present for automatic upsert; use a verified `page_id` for direct post-fill if the key is missing. Exact queries follow pagination; incomplete queries block writes.
 - If a key collides with multiple rows, do not write; ask user.
 
 ## JSONL input format for the apply script
@@ -121,7 +127,7 @@ Each line is a JSON object:
 
 Optional control fields (for cleanup / manual fixes):
 - `page_id` (or `id`): update this Notion page directly (bypasses upsert matching)
-- `archive: true`: archive the page (useful for de-dup)
+- `archive: true`: archive an existing matched or directly addressed page; never creates a row. An already archived direct page is skipped.
 - `overwrite: true`: allow overwriting existing values (including clearing with null)
 
 Optional behavior flags:
@@ -147,7 +153,7 @@ Property value encoding:
 
 ## Note (implementation)
 - JS implementation is the default: `scripts/notion_apply_records.js`
-- Legacy Python implementation is kept for reference: `scripts/_deprecated/notion_apply_records.py`
+- Legacy Python implementation is reference-only: `scripts/_deprecated/notion_apply_records.py`. Do not use it for plan/apply or as a rejection fallback.
 
 
 ## Notion tooling (recommended)
