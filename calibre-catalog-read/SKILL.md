@@ -1,98 +1,63 @@
 ---
-name: "calibre-catalog-read"
-description: "Calibre catalog lookup, viewing, and delegated one-book analysis."
-metadata: {"openclaw":{"requires":{"bins":["node","uv","calibredb","ebook-convert"],"env":["CALIBRE_PASSWORD"]},"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-catalog-read/state/runs.json","skills/calibre-catalog-read/state/calibre_analysis.sqlite","skills/calibre-catalog-read/state/cache/**"],"modifiesRemoteData":["calibre:comments-metadata"]}}
+name: calibre-catalog-read
+description: "Search/view a Calibre catalog or prepare and validate one-book analysis without changing library metadata. Route metadata edits, including comments and tags, to calibre-metadata-apply."
+metadata: {"openclaw":{"requires":{"bins":["node","calibredb"]},"optionalBins":["python3","ebook-convert","pdftotext"],"optionalEnv":["CALIBRE_WITH_LIBRARY","CALIBRE_LIBRARY_ID","CALIBRE_USERNAME","CALIBRE_PASSWORD"],"localWrites":["user cache and state directories"],"modifiesRemoteData":[]}}
 ---
 
-# calibre-catalog-read
+# Read the catalog without modifying it
 
-Use for Calibre read-only catalog work and the one-book analysis/comments workflow.
+1. Resolve this skill's absolute directory as {baseDir}. Read the workspace AGENTS.md Tools notes for the server, library ID, and authentication. Use configured environment/default config first; do not ask for known connection details.
+2. Use the wrapper below for list/search/id. An ID or "show/check/view/details" request is not edit intent. Confirm the exact target before exporting or doing full-book analysis.
+3. Return the retrieved metadata with its ID. Distinguish an empty match from connection/tool failure; possibly_truncated means the bounded result may be incomplete, not that the entire library was examined.
 
-## Routing
+    node "{baseDir}/scripts/calibredb_read.mjs" list --limit 50
+    node "{baseDir}/scripts/calibredb_read.mjs" search --query 'series:"中公文庫"' --limit 100
+    node "{baseDir}/scripts/calibredb_read.mjs" id --book-id 3
+    node "{baseDir}/scripts/calibredb_read.mjs" libraries --with-library "http://HOST:8080/"
 
-Use this skill for:
-- list/search/id catalog lookup.
-- ID viewing: `ID 1021 を確認して`, `1021番の詳細`, `show/view/check book 1021`.
-- Natural book conversation where a lightweight library lookup helps.
-- One-book analysis only when the user clearly asks to read/analyze a book.
+## Connection contract
 
-Do not use for metadata edits. If the user asks to change title/authors/series/series_index/tags/publisher/pubdate/languages, route to `calibre-metadata-apply`.
+Precedence: --with-library, CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL, then config.with_library. A server URL must select #LIBRARY_ID; use --library-id, CALIBRE_LIBRARY_ID, or config.library_id when the URL lacks it. libraries is read-only discovery on the specified server, not network scanning. Do not pass the browser's #library_id= URL.
 
-ID alone is not edit intent. 確認/見せて/教えて/詳細/check/show/view means read-only. `calibre-metadata-apply` requires explicit edit verbs such as 修正/編集/変更/直す/fix/edit/update/change.
+Config defaults to ~/.config/calibre-catalog-read/config.json; override with --config or CALIBRE_CATALOG_CONFIG. Keys: with_library, library_id, username, password_env, reading_script (human-only legacy hint). Unknown keys fail. No implicit .env loading or credential persistence. Credentials come from the existing environment; --password-env names the password variable. Raw --password is rejected. Passwords never enter child argv or diagnostics. Non-SSL server authentication is handled by Calibre (Digest); do not invent auth-mode/auth-scheme flags.
 
-## Local Facts
+Local library directories must already contain metadata.db. Explicit endpoints never fail over to DNS/WSL/Docker/localhost guesses. Never start calibre-server from chat.
 
-Read the workspace `AGENTS.md` `## Tools` section for Content server URL, library id, auth policy, and reading script.
+## One-book analysis: prepare first, complete offline
 
-Connection bootstrap:
-- Do not ask the user for `--with-library` first.
-- First try scripts without explicit `--with-library`; they auto-load `.env` and saved defaults.
-- Ask for URL only if resolution fails (`missing --with-library` or unable to resolve usable library).
-- Non-SSL auth is Digest; do not pass auth-mode/auth-scheme flags.
-- Never start `calibre-server` from chat.
-- Do not assume localhost/127.0.0.1; the workspace `AGENTS.md` `## Tools` section has the reachable server.
+Do this only for an explicit reading/analysis request. Catalog lookup alone does not authorize metadata changes, bulk extraction, OCR, or sending a book to a new external service.
 
-Requirements: `calibredb`, `ebook-convert`, `node`, and `uv`.
+1. Choose a unique logical RUN_ID (letters/digits/._-, starting with an alphanumeric). Export and extract first:
 
-## Commands
+       python3 "{baseDir}/scripts/run_analysis_pipeline.py" prepare \
+         --book-id 3 --run-id RUN_ID --lang ja --format EPUB
 
-Prefer wrapper scripts over direct `calibredb` in agent/chat.
+   EPUB/PDF are supported; ebook-convert is used first, pdftotext is the optional PDF fallback. --cache-dir overrides the user cache root. prepare_subagent_input.mjs is an equivalent preparation entrypoint, not a raw-text shortcut.
 
-List:
-    node skills/calibre-catalog-read/scripts/calibredb_read.mjs list --password-env CALIBRE_PASSWORD --limit 50
+   Completion criterion: status=prepared with prepared_input and input_sha256. On skipped/excluded_content or low_text_requires_confirmation, stop; do not spawn analysis or claim success. --force-low-text requires the user's explicit acceptance of incomplete extraction and a fresh run ID. Empty extraction always stops. Comic-tagged books are excluded from this text workflow.
 
-Search:
-    node skills/calibre-catalog-read/scripts/calibredb_read.mjs search --password-env CALIBRE_PASSWORD --query 'series:"中公文庫"'
+2. Register the prepared manifest before delegation:
 
-Get by id:
-    node skills/calibre-catalog-read/scripts/calibredb_read.mjs id --password-env CALIBRE_PASSWORD --book-id 3
+       node "{baseDir}/scripts/run_state.mjs" upsert \
+         --run-id RUN_ID --input-json /absolute/run/subagent_input.json
 
-One-book pipeline with prepared analysis JSON:
-    uv run python skills/calibre-catalog-read/scripts/run_analysis_pipeline.py --password-env CALIBRE_PASSWORD --book-id 3 --lang ja --analysis-json /tmp/calibre_3/analysis.json
+   The record binds the manifest bytes and target. Do not replace/reuse a failed or completed run ID. Optional --state selects a separate state file.
 
-Prepare subagent input:
-    node skills/calibre-catalog-read/scripts/prepare_subagent_input.mjs --book-id 3 --lang ja --out-dir /tmp/calibre_3
+3. Use references/subagent-analysis.prompt.md and both JSON schemas. The analysis worker reads the prepared parts and emits only analysis JSON. Use the currently available isolated worker/tool schema; no fixed agent ID, model, two-turn rule, or assumed completion mode. Keep the runtime handle and follow its accepted wait/collection contract. Main owns user responses and every metadata-write decision.
 
-Run state:
-    node skills/calibre-catalog-read/scripts/run_state.mjs upsert --run-id <RUN_ID> --book-id 3 --title "..." --state running
-    node skills/calibre-catalog-read/scripts/handle_completion.mjs --run-id <RUN_ID> --analysis-json /tmp/analysis.json
+4. Validate and produce a local proposal:
 
-## One-Book Analysis Flow
+       node "{baseDir}/scripts/handle_completion.mjs" --run-id RUN_ID \
+         --analysis-json /absolute/analysis.json --proposal-jsonl /absolute/NEW-proposal.jsonl
 
-Delegate only full-book reading. Main remains the control plane.
+   Completion criterion: status=proposal_created and an existing JSONL proposal. Completion is offline: no re-export, network lookup, or metadata write. Missing/duplicate runs do no work; failed/corrupt state remains for inspection. An existing lock requires checking live work before manual recovery, never automatic lock deletion.
 
-1. Confirm target `book_id`.
-2. Prepare input with `scripts/prepare_subagent_input.mjs`.
-3. Build a self-contained task from `references/subagent-analysis.prompt.md` and the generated `subagent_input.json` path.
-4. Call OpenClaw `sessions_spawn` with the live tool schema:
-   - `runtime: "subagent"`
-   - `agentId: "calibre-reader"`
-   - `mode: "run"`
-   - `context: "isolated"`
-   - `lightContext: true`
-   - omit `model` and `thinking`; the target agent profile owns them.
-5. Save the returned run/session identifiers with `scripts/run_state.mjs upsert`.
-6. Use `sessions_yield` when completion belongs in a later turn. Do not poll session or subagent lists.
-7. On completion, validate the raw JSON against `references/subagent-analysis.schema.json`, then run `scripts/handle_completion.mjs`.
+5. Present the analysis, source identity, and full/partial coverage honestly. Coverage validates reported parts against prepared files/hashes/counts; it does not prove that a model understood the text. Preserve partial coverage in user-facing output. If the user also wants comments/tags updated, route the generated proposal through calibre-metadata-apply and its plan/apply gates; never apply it from this skill.
 
-Use Swarm only for an explicitly requested independent multi-book batch. Keep one book per child and preserve the same input/output contract.
+## Data and migration
 
-Hard rules:
-- One book per child run.
-- Main owns user-facing replies and Calibre comments apply.
-- Child reads prepared input and emits analysis JSON only; it must not apply metadata or message the user.
-- Use `references/subagent-analysis.prompt.md`; do not send relaxed ad-hoc instructions.
-- Input schema: `references/subagent-input.schema.json`; output schema: `references/subagent-analysis.schema.json`.
-- Exclude manga/comic-centric books from this text pipeline.
-- If extracted text is too short, stop and ask for confirmation.
-- Keep `state/runs.json` to active/failed records only.
-- At completion, missing runId means stale/duplicate; do not apply blindly.
-
-## Cache And Language
-
-Cache DB is `skills/calibre-catalog-read/state/calibre_analysis.sqlite`. Treat cache as acceleration, not authority; final user-visible analysis must reflect the current target and completed run.
-
-Language policy:
-- Do not hardcode user-language prose in pipeline scripts.
-- Generate user-visible analysis from child output, controlled by user settings and the `lang` input.
-- Local fallback analysis is generic/minimal; prefer output following the prompt template.
+- User state: CALIBRE_CATALOG_STATE_DIR, else XDG_STATE_HOME/calibre-catalog-read or ~/.local/state/calibre-catalog-read.
+- User cache: CALIBRE_CATALOG_CACHE_DIR, else XDG_CACHE_HOME/calibre-catalog-read or ~/.cache/calibre-catalog-read.
+- Exported originals, extracted text, parts, plans, and summaries are private. Keep them outside the skill package; do not publish or automatically delete them.
+- Legacy package/state, old run formats, and old SQLite caches are not automatically migrated. Re-prepare active legacy work under a new run/state path; preserve originals. analysis_db.py is an optional local index, never completion authority. See README.md for test/migration details.
+- Python >=3.11 is needed for analysis/cache helpers; Node >=20 and calibredb suffice for catalog lookup. No uv/network dependency install is required.

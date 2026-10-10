@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 state/runs.json
+state/*.sqlite
+state/cache/
+state/*.tmp-*
+state/*.lock

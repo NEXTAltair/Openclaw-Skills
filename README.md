@@ -4,8 +4,8 @@
 
 ## Included custom skills
 
-- calibre-catalog-read
-- calibre-metadata-apply
+- [calibre-catalog-read](calibre-catalog-read/README.md) - Calibreの検索・参照・書籍解析(メタデータは変更しない)
+- [calibre-metadata-apply](calibre-metadata-apply/README.md) - 変更計画の確認・保存・適用・再読込検証
 - diy-pc-ingest
 - accidental-registry-publication-response
 - compare-evolving-online-services

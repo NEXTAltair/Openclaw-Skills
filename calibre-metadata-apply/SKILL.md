@@ -1,144 +1,56 @@
 ---
-name: "calibre-metadata-apply"
-description: "Edit Calibre metadata through verified dry-run and apply gates."
-metadata: {"openclaw":{"requires":{"bins":["node","calibredb"],"env":["CALIBRE_PASSWORD"]},"optionalBins":["pdffonts"],"optionalEnv":["CALIBRE_USERNAME"],"primaryEnv":"CALIBRE_PASSWORD","localWrites":["skills/calibre-metadata-apply/state/runs.json"],"modifiesRemoteData":["calibre:metadata"]}}
+name: calibre-metadata-apply
+description: "Edit explicitly selected Calibre metadata using a saved dry-run plan, stale-target checks, apply receipts, and readback verification. Use for title/authors/sort/series/tags/date/language/comments edits, not viewing an ID."
+metadata: {"openclaw":{"requires":{"bins":["node","calibredb"]},"optionalEnv":["CALIBRE_WITH_LIBRARY","CALIBRE_LIBRARY_ID","CALIBRE_USERNAME","CALIBRE_PASSWORD"],"localWrites":["user state plans and apply receipts"],"modifiesRemoteData":["calibre:metadata"]}}
 ---
 
-# calibre-metadata-apply
+# Apply only the reviewed metadata change
 
-Use for Calibre metadata writes. This skill can change remote Calibre metadata.
+1. Resolve this skill's absolute directory as {baseDir}. Use calibre-catalog-read to identify the exact library, IDs, titles, authors, and series. "Show/check ID" alone routes to that read-only skill.
+2. Establish authorized scope. An explicit request specifying exact IDs and values can already authorize that change; do not demand repeated ceremonial confirmation. Ambiguous matches or evidence-derived proposals require presenting every candidate, uncertainty, target, and before/after field for approval. Never treat high confidence or a child's completion as permission to write.
+3. Build JSONL (one object per book), then dry-run all rows. The wrapper rejects the entire input before mutation on invalid rows, duplicate IDs, unsupported fields/types, conflicting comments, or malformed markers.
 
-## Routing
+       node "{baseDir}/scripts/calibredb_apply.mjs" \
+         --plan-file /absolute/NEW-plan.json < /absolute/changes.jsonl
 
-Use when user explicitly asks to edit/fix/update/change:
-- title, title_sort
-- authors, author_sort
-- series, series_index
-- tags, publisher, pubdate, languages
-- comments, analysis, analysis_tags
+   Completion criterion: mode=dry-run, a saved plan_file/plan_digest, and before/after values for every row. Do not execute the displayed diagnostic command; the wrapper owns apply.
 
-Do not use for read-only requests such as `ID1021 を確認して`, 詳細, show/view/check. Route those to `calibre-catalog-read`.
+4. Present/confirm the exact plan when not already authorized. Apply that saved plan, with no JSONL on stdin:
 
-ID + edit verb means this skill. ID without edit verb means read-only.
+       node "{baseDir}/scripts/calibredb_apply.mjs" \
+         --apply --plan-file /absolute/plan.json < /dev/null
 
-## Supported Fields
+   Completion criterion: ok=true and verified per-row applied/no-op results. Inspect receipt_file. Exit-zero from set_metadata alone is never proof of success. Failures, stale values, or readback mismatches stop further writes and preserve reconciliation records.
 
-Core fields:
-- `title`, `title_sort`
-- `authors` as string with `&` or array, `author_sort`
-- `series`, `series_index`
-- `tags` as string or array, `publisher`, `pubdate` as `YYYY-MM-DD`, `languages`
-- `comments`
+5. Report actual changed/no-op/skipped/stale/failed/unverifiable IDs and before/after values. Never turn partial success into full success. For a failed/uncertain attempt, inspect the receipt and re-read actual values before making a new plan. Never blindly retry, delete receipts/locks, or claim automatic rollback.
 
-Extended fields:
-- `comments_html`: OC marker block upsert.
-- `analysis`: auto-generates analysis HTML for comments.
-- `analysis_tags`: adds tags.
-- `tags_merge`: default true.
-- `tags_remove`: remove specific tags after merge.
+## Fields and semantics
 
-## Safety Contract
+Direct: title, title_sort, authors, author_sort, series, series_index, tags, publisher, pubdate, languages, comments.
 
-Required flow:
-1. Run read-only lookup to narrow candidates.
-2. Show `id,title,authors,series,series_index`.
-3. Get user confirmation for target IDs.
-4. Build JSONL only for confirmed IDs.
-5. Dry-run first.
-6. Apply only after explicit user approval.
-7. Re-read and report final values.
+- title/authors cannot be empty. Authors arrays preserve name commas; do not join authors with commas. A literal & or | inside one name is rejected before mutation: Calibre's field parser cannot represent it safely. Do not silently split or substitute the name.
+- title_sort/author_sort are explicit values. Use the workspace's configured Japanese reading script as a human proposal preference, not executable code. Do not invent readings. Calibre may preserve an old sort when authors/title change; show and approve sort changes explicitly.
+- pubdate uses YYYY-MM-DD and is sent with an explicit UTC timestamp to prevent date drift. Null/empty clears the date. languages accepts supported ISO639 codes; readback normalizes two/three-letter aliases. series_index is finite/nonnegative and requires a series.
+- Tags merge by default. tags:[] is a no-op with that default. Use tags_merge:false for replacement/clear, or tags_remove for explicit removals. Other omitted fields remain untouched. Null/empty clears optional string fields; series_index is not nullable.
+- comments replaces the full comment only when explicitly requested. analysis produces escaped HTML and safely replaces one OC_ANALYSIS marker block while preserving other comments. comments_html accepts one explicit marker block; it is raw user-approved HTML, not automatically trusted child text. These three inputs are mutually exclusive.
+- analysis may carry coverage. Keep full/partial counts in generated comments. Catalog proposals also carry expected_library/expected_uuid; retain them so the dry-run rejects cross-library/book confusion.
 
-Never:
-- Apply ambiguous title matches.
-- Include unconfirmed IDs.
-- Auto-fill low-confidence candidates.
-- Start `calibre-server`.
-- Pass Calibre password inline.
-- Use direct `calibredb` for chat/agent edit operations; use wrapper scripts.
+Input examples: references/changes.example.md. Copy only the fenced JSONL rows into your changes file. Treat examples as proposals, never as pre-approved IDs.
 
-## Local Facts
+## Endpoint, credentials, and persistence
 
-Read the workspace `AGENTS.md` `## Tools` section for Content server URL, library id, auth, and reading script.
+Read local connection facts from workspace AGENTS.md Tools. Endpoint precedence: --with-library, the CALIBRE_WITH_LIBRARY / CALIBRE_LIBRARY_URL / CALIBRE_CONTENT_SERVER_URL variables, then config.with_library. A server URL needs #LIBRARY_ID (or --library-id / CALIBRE_LIBRARY_ID / config.library_id). Local libraries must already contain metadata.db. There is no host autodiscovery/failover or server start.
 
-Connection bootstrap:
-- Do not ask the user for `--with-library` first.
-- First use saved defaults with no explicit `--with-library`.
-- Scripts auto-load `.env`.
-- Non-SSL auth is Digest; do not pass auth-mode/auth-scheme flags.
-- Ask for URL only after command output shows unresolved connection.
-- Prefer env-based password with `--password-env CALIBRE_PASSWORD`; username auto-loads from env, or override with `--username`.
+Config: ~/.config/calibre-metadata-apply/config.json, or --config. Allowed keys: with_library, library_id, username, password_env, state_dir, reading_script (human-only legacy preference). No implicit .env loading. Unknown options fail rather than pretending to work. Legacy --save-auth/--save-plain-password/--server-hosts/auth-mode flags are removed.
 
-Requirements: `calibredb` and `node`; `pdffonts` optional/recommended for PDF evidence checks.
+Use the existing credential environment and --password-env (default CALIBRE_PASSWORD). The wrapper sends the secret through Calibre's documented <stdin> mechanism, never in argv, plans, or diagnostics. Never pass raw --password.
 
-## Commands
+State root: --state-dir, CALIBRE_METADATA_APPLY_STATE_DIR, config.state_dir, XDG_STATE_HOME/calibre-metadata-apply, or ~/.local/state/calibre-metadata-apply. Plans are no-clobber files; attempts are fsynced intent/result JSONL receipts. One attempt per plan digest, with a per-library local apply lock. A plan digest detects accidental edits; it is not human authorization, server identity certification, or server-side CAS. Other clients can still race the final read/write window.
 
-Dry-run:
-    cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs --password-env CALIBRE_PASSWORD --lang ja
+## Delegated evidence / unknown documents
 
-Apply:
-    cat changes.jsonl | node skills/calibre-metadata-apply/scripts/calibredb_apply.mjs --password-env CALIBRE_PASSWORD --lang ja --apply
+Keep main responsible for target selection, synthesis, review, and all writes. Delegate only independent evidence/proposal generation using the live tool schema and accepted completion mode; never assume a fixed calibre-reader profile. Child results are proposals, not permission to write.
 
-Run state:
-    node skills/calibre-metadata-apply/scripts/run_state.mjs upsert --run-id <RUN_ID> --session-key <RUNTIME_HANDLE> --task <TASK> --state running
-    node skills/calibre-metadata-apply/scripts/handle_completion.mjs --run-id <RUN_ID> --result-json /tmp/result.json
+For unknown books, start with existing metadata and show all rows. Escalate to first-page or first/last-five-page inspection only when requested, then add attributable web evidence if needed. Preserve uncertainty and conflicting candidates. pending-review tags are also metadata changes and need authorized scope. Never infer permission for bulk extraction or new external disclosure.
 
-## Unknown-Document Recovery
-
-Use when title/author/series are missing or unreliable.
-
-Default stage is light pass:
-1. Analyze existing metadata only.
-2. Present all rows, not samples.
-3. Stop for user instruction before deeper inspection.
-
-On request:
-- Page-1 pass: first page only.
-- Deep pass: first 5 + last 5 pages and web evidence.
-- Apply gate: explicit approval before writes.
-
-Proposal synthesis:
-- Collect evidence from file extraction and web sources when metadata is missing.
-- Show one merged proposal table with id, current fields, candidate fields, source, confidence high|medium|low, and sort candidates.
-- Apply only approved/finalized fields.
-- If confidence is low or sources conflict, keep fields empty.
-- Use pending-review tag for unresolved/hold items; do not force guesses.
-
-Required report shape for batch recovery:
-- execution summary with target/changed/pending/skipped/error.
-- full changed list with `id` and key before/after fields.
-- full pending list with `id` and reason.
-- full error list with `id` and error summary.
-
-## Extraction And Sort
-
-- Try `ebook-convert` first.
-- If empty/failed, fallback to `pdftotext`.
-- If both fail, switch to web-evidence-first mode.
-- Use the Calibre `reading_script` in the workspace `AGENTS.md` `## Tools` section for Japanese/non-Latin sort fields.
-- Default policy is full reading, no truncation.
-- Ask once on first use only when the workspace `AGENTS.md` `## Tools` section lacks the configured reading script.
-
-## Heavy Analysis
-
-Delegate only independent proposal generation. Main owns target selection, final judgment, dry-run, apply, and reporting.
-
-1. Define a self-contained task with input paths, evidence limits, and output contract.
-2. Call OpenClaw `sessions_spawn` with the live tool schema:
-   - `runtime: "subagent"`
-   - `agentId: "calibre-reader"`
-   - `mode: "run"`
-   - `context: "isolated"`
-   - `lightContext: true`
-   - omit `model` and `thinking`; the target agent profile owns them.
-3. Save the returned run/session identifiers and task with `scripts/run_state.mjs upsert`.
-4. Use `sessions_yield` when completion belongs in a later turn. Do not poll session or subagent lists.
-5. Save result JSON and run `scripts/handle_completion.mjs --run-id ... --result-json ...`.
-6. Return a proposal or apply result only after the existing user gate is satisfied.
-
-Use Swarm only when the user requests a large batch that divides into independent evidence rows. Collector children remain read-only; the main session owns synthesis and every write gate.
-
-Data flow:
-- Local execution reads Calibre metadata/files and writes metadata only after approval.
-- Child execution may receive extracted source/evidence for candidate generation.
-- Child must not apply metadata or message the user.
-- If the user declines external model/subagent processing, keep the flow local.
+Optional run helpers bind completion to run_id and do not apply metadata. A result object must have matching run_id, ok:boolean, and status:proposal_ready|completed|failed. See README.md for examples, recovery limits, and regression commands.
