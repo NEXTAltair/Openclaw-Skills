@@ -20,6 +20,8 @@
 - session-logs
 - soul-in-sapphire
 - trace-configuration-file-migrations
+- [vsd-craft-operations](vsd-craft-operations/README.md) - VSD Craftの設定・導入・バックアップ・復旧
+- [vsd-craft-plugin-development](vsd-craft-plugin-development/README.md) - Elgato互換調査、プラグイン雛形、検証・配布
 - windows-usb-volume-triage
 - worldlines-scenario-authoring
 
