@@ -20,6 +20,7 @@ let result = {id: 'fixture-page',url:'https://example.invalid/page'};
 if (apiPath.includes('/query')) result = {results:[]};
 if (apiPath.includes('/children')) result = {results:[],has_more:false};
 if (apiPath.includes('/databases/')) result = {id:'fixture-db',data_sources:[{id:'fixture-ds'}]};
+if (apiPath.includes('/data_sources/') && !apiPath.endsWith('/query')) result = {properties:Object.fromEntries(Object.entries({Name:'title',when:'date',context:'rich_text',axis:'select',level:'number',scale_version:'number',event:'relation',state_json:'rich_text',body:'rich_text',worklog:'rich_text',session_summary:'rich_text'}).map(([name,type])=>[name,{type,...(type==='relation'?{relation:{data_source_id:'fixture-ds'}}:{})}]))};
 console.log(JSON.stringify({ok:true,result}));
 `);
 function run(name, args = [], input = '', env = {}) {
@@ -127,12 +128,14 @@ test('historical candidate without an id has a stable consumable identity', () =
 test('state/emotion relations and subjective journal survive an invalid ambient setting and Notion failures remain failures', () => {
   const log = path.join(root,'self.log');
   const env = {SIS_TEST_LOG:log,SIS_AMBIENT_RECALL:'broken'};
-  const payload = JSON.stringify({event:{title:'Fixture',context:'I wondered whether my wording felt rejecting.'},
-    emotions:[{axis:'stress',level:6,comment:'I worried, tentatively.'}],state:{reason:'My interpretation is uncertain.'}});
-  const args = ['--events-dbid','events','--emotions-dbid','emotions','--state-dbid','state','--state-dsid','ds','--payload-json',payload];
+  const payload = JSON.stringify({scale_version:2,event:{title:'Fixture',context:'I wondered whether my wording felt rejecting.'},
+    emotions:[{axis:'stress',level:1,comment:'I worried, tentatively.'}],state:{reason:'My interpretation is uncertain.'}});
+  const args = ['--events-dbid','events','--emotions-dbid','emotions','--state-dbid','state','--state-dsid','fixture-ds','--payload-json',payload,'--mirror-file',path.join(root,'now-state.json'),'--heartbeat-file',path.join(root,'heartbeat-state.json'),'--receipt-file',path.join(root,'tick-receipt.json')];
   const state = run('emostate_tick',args,'',env);
   assert.equal(state.status,0,state.stderr);
   assert.equal(parse(state).ok,true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root,'now-state.json'))).scale_version,2);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root,'heartbeat-state.json'))).lastSnapshotResult,'success');
   const journal = run('journal_write',['--journal-dbid','journal'],JSON.stringify({body:'I felt uncertain, then settled; the question remains.'}),env);
   assert.equal(journal.status,0,journal.stderr);
   const writes = fs.readFileSync(log,'utf8').trim().split('\n').map(JSON.parse).filter(x=>x.path.endsWith('/pages'));
@@ -140,7 +143,7 @@ test('state/emotion relations and subjective journal survive an invalid ambient 
   assert.equal(writes[1].body.properties.event.relation[0].id,'fixture-page');
   assert.equal(writes[2].body.properties.event.relation[0].id,'fixture-page');
   assert.match(writes[3].body.properties.body.rich_text[0].text.content,/I felt uncertain/);
-  assert.notEqual(run('emostate_tick',args,'',{...env,SIS_TEST_FAIL:'1'}).status,0);
+  assert.notEqual(run('emostate_tick',[...args.slice(0,-1),path.join(root,'failed-tick-receipt.json')],'',{...env,SIS_TEST_FAIL:'1'}).status,0);
   const failedJournal = run('journal_write',['--journal-dbid','journal'],'{"body":"subjective fixture"}',{...env,SIS_TEST_FAIL:'1'});
   assert.notEqual(failedJournal.status,0);
   assert.doesNotMatch(failedJournal.stdout,/"ok":\s*true/);

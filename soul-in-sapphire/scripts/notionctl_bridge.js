@@ -54,6 +54,12 @@ function authSetupHint() {
   ].join(' ');
 }
 
+function apiFailureHint(raw) {
+  if (/unauthorized|\b401\b|missing.*(?:token|api.key)|NOTION_API_KEY.*(?:required|missing)/i.test(String(raw))) return authSetupHint();
+  if (/validation_error|property that exists/i.test(String(raw))) return 'Validate the target database/data source IDs and property schema; this is not an authentication diagnosis.';
+  return 'Inspect the failing endpoint/stage before changing credentials or retrying a write.';
+}
+
 function redactKnownSecrets(text) {
   let out = String(text || '');
   for (const k of NOTION_AUTH_ENV_KEYS) {
@@ -90,7 +96,7 @@ function runApi(method, apiPath, body = null) {
     const combined = [info.stdout, info.stderr, info.msg].filter(Boolean).join('\n');
     const compat = apiCompatibilityHint(combined);
     if (compat) throw new Error(compat);
-    throw new Error(`notionctl api execution failed. ${authSetupHint()}\n${redactKnownSecrets(combined || 'unknown error')}`);
+    throw new Error(`notionctl api execution failed. ${apiFailureHint(combined)}\n${redactKnownSecrets(combined || 'unknown error')}`);
   }
 
   const obj = parseNotionctlJson(out);
@@ -100,7 +106,7 @@ function runApi(method, apiPath, body = null) {
   if (!obj.ok) {
     const compat = apiCompatibilityHint(out);
     if (compat) throw new Error(compat);
-    throw new Error(`notionctl api not ok. ${authSetupHint()}\n${redactKnownSecrets(out)}`);
+    throw new Error(`notionctl api not ok. ${apiFailureHint(out)}\n${redactKnownSecrets(out)}`);
   }
   return obj.result || {};
 }

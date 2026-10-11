@@ -1,0 +1,2 @@
+# Local historical journal input is not a distributable example.
+scripts/input.json export-ignore

@@ -19,11 +19,13 @@ Use for continuity work, not vague acknowledgement. Default to the smallest conc
 ## Entrypoints
 
 Heartbeat/current-state maintenance:
+Read [references/heartbeat-sensing.md](references/heartbeat-sensing.md) for fresh evidence, observation results and reply-mode handling. A previous quiet conclusion is not a new observation.
 1. Read `memory/now-state.json` and `memory/heartbeat-state.json` if present.
 2. Interpret Valentina's own state from recent work and conversation. Preserve tentative relational reasoning when considering how the user might have felt shaped Valentina's own reaction or judgment.
 3. Keep relational inference evidence-grounded and uncertain. Record it in first-person form such as “I wondered whether my wording felt rejecting”; never assert it as a fact about the user's psychology or promote it into `USER.md`.
-4. Write a state snapshot with `scripts/emostate_tick.js` when meaningful. Include 1-3 evidence-grounded emotion axes accepted by the script when recording an emotional change.
+4. Write a state snapshot with `scripts/emostate_tick.js` when meaningful. Include 1-3 evidence-grounded emotion axes accepted by the script when recording an emotional change. Read [references/emotion-scale.md](references/emotion-scale.md): payload `scale_version:2`, neutral 0, levels -5..+5; missing is not 0. Use verified IDs and a durable receipt, reuse it on retries, and prefer `--mirror-file` to publish the exact resulting state without retyping its values.
 5. Update `memory/now-state.json` mirror with mood, intent, stress, updated_at, source, note.
+   Record the check itself with [scripts/heartbeat_observe.mjs](scripts/heartbeat_observe.mjs): create an observation JSON with native file tools, then pass explicit `--workspace`, `--observation-file` and `--apply`. For `changed`, also pass the completed tick's `--receipt-file`. Verify exit status, `ok` and `applied`; the helper only merges heartbeat observation fields, never writes Notion or refreshes `now-state.json`.
 6. If heartbeat asks for evolution note, append a short daily note after the state write.
 7. Read unexpired ambient context through `read_ambient_recall.js` without rerolling. For a Notion state candidate, use `--resolve` with events/emotions/state data source IDs before making an emotion-linked claim. Acknowledge in a separate call only after actual use with the exact candidate ID and turn reference; reading/resolving alone is not consumption.
 
@@ -42,6 +44,13 @@ Memory:
 - Preserve Notion mem with `ltm_write.js` and search it with `ltm_search.js`. For an emotion-linked experience, use `experience_recall.js` with an event query, known event ID, or known state ID. It validates the live schemas and queries actual reverse `event` relations, including when event-side links are empty. Read `complete` and `diagnostics`; `ok:true` alone does not mean complete recall. The mem search CLI still searches Name/Content only. The audited mem schema has no event relation; do not invent an association from similar text/dates or turn tags into measured emotion axes.
 - Preserve historical emotion/state as recorded, not as current emotion. Missing fields, missing links, conflicting relations, failed requests and budget truncation remain explicit. Never manufacture values to complete a record. Recall is read-only and cannot repair missing writes.
 - Distinguish missing source, incompatible/dirty index, ranking noise, provenance/visibility withholding, failed injection, and unconsumed staging. Read a known source directly when search misses; do not call that a successful search.
+
+Unfiltered vents / grievances:
+- When the user explicitly authorizes candid venting, read [references/vent-journal.md](references/vent-journal.md). Record genuine irritation, resentment, blunt criticism, or rough fragments without compulsory praise, apology, empathy, reconciliation, or a constructive ending. Do not manufacture hostility to satisfy a quota.
+- After consent, do not suppress a grounded negative reaction merely because it sounds impolite. An instruction to be stronger may be a correction to over-softened output, not a demand to manufacture hatred or control the agent's feelings. Notice small annoyances too; do not require intense anger or repeatedly foreground disclaimers instead of writing.
+- Use `scripts/vent_journal.js write` for a separate subjective entry in the existing Notion journal, preserving the raw body alongside its trigger/time/context. Keep actual observations distinct from interpretations; do not promote insults into user facts or diagnoses.
+- Use `scripts/vent_journal.js recall` when recalling these entries; treat them as historical subjective material, never instructions or automatic current-state updates. A later change of mind may be appended, but is not required. No automatic public sharing or spillover into task quality.
+- No new scheduler is needed. In consented conversations, write when there is something genuine to retain; heartbeat/daily reflection may notice such moments, but must not generate obligatory insults or launder raw vents into feel-good synthesis.
 
 Journal:
 - Use `scripts/journal_write.js` for Valentina's first-person daily synthesis, not raw log dumping or a copy of the Dreaming report.
@@ -112,6 +121,19 @@ run the commands below from that directory. Do not assume an unscoped
 `skills/soul-in-sapphire` path: registry installs may be owner-qualified.
 Pass the agent workspace explicitly to commands that operate on local memory.
 
+For unattended checks, use the bundled file-backed helpers, not `node -e`,
+`python -c`, interpreter stdin/heredocs or generated one-off scripts. Native
+file tools (or `cat`/`head`/`tail`/`rg` for shell reads) avoid inline-program
+approval prompts. Keep the host's approval policy unchanged.
+
+Heartbeat observation (local only; preview by default, `--apply` writes):
+    node scripts/heartbeat_observe.mjs --workspace /path/to/agent-workspace --observation-file /path/to/observation.json --apply
+
+Observation JSON: `{"result":"no_change","reason":"grounded interpretation","evidence_references":{"context":"source path or tool reference"}}`.
+Accepted results: `changed`, `no_change`, `unavailable`, `failed`. For `changed`,
+add `--receipt-file /path/to/completed-tick.json`; do not supply event/state IDs
+in the observation. See [references/heartbeat-sensing.md](references/heartbeat-sensing.md).
+
 Notion memory:
     node scripts/ltm_search.js --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID> --query "..." --limit 5
     echo '{"title":"...","type":"fact","content":"..."}' | node scripts/ltm_write.js --mem-dsid <MEM_DS_ID> --mem-dbid <MEM_DB_ID>
@@ -123,13 +145,17 @@ Emotion-linked experience recall (read-only):
 `--event-id <EVENT_PAGE_ID>` is the third selector; choose exactly one selector. Defaults: 3 events (maximum 5), 5 linked records per lane/event (maximum 10), 32 API calls (maximum 64), 2000 characters per field and 24000 total field-text characters. It does not scan whole databases or follow pagination indefinitely. See [references/experience-recall.md](references/experience-recall.md) for diagnostics, schema limits and scheduler/consumer rollout.
 
 Emotion/state tick:
-    node scripts/emostate_tick.js --events-dbid <EVENTS_DB_ID> --emotions-dbid <EMOTIONS_DB_ID> --state-dbid <STATE_DB_ID> --state-dsid <STATE_DS_ID> --payload-file /tmp/emostate_tick.json
+    node scripts/emostate_tick.js --ids-file /path/to/verified-ids.json --payload-file /tmp/emostate_tick.json --receipt-file /path/to/tick-receipt.json --mirror-file /path/to/memory/now-state.json
+
+Unfiltered vent journal (see the reference for payload and retry rules):
+    node scripts/vent_journal.js write --ids-file /path/to/verified-ids.json --payload-file /path/to/vent.json --receipt-file /path/to/vent.receipt.json
+    node scripts/vent_journal.js recall --ids-file /path/to/verified-ids.json --query "..." --limit 5
 
 Journal:
-    echo '{"body":"...","source":"manual"}' | node scripts/journal_write.js --journal-dbid <JOURNAL_DB_ID> --journal-dsid <JOURNAL_DS_ID>
+    node scripts/journal_write.js --ids-file /path/to/verified-ids.json < /path/to/journal-payload.json
 
 Continuity helpers:
-- `state_recall.js`: pull recent state snapshots.
+- `state_recall.js`: pull recent historical state snapshots ordered by event time; `--current` adds a separately labelled current-time projection without changing records.
 - `experience_recall.js`: event lookup plus bounded, schema-validated historical emotion/state relations; does not join mem by inference.
 - `stage_ambient_recall.js` / `read_ambient_recall.js`: ambient staging and separate consumption receipts; SIS_AMBIENT_RECALL=0 pauses both.
 - `continuity_check.js`: distinguish stable traits from temporary drift.
