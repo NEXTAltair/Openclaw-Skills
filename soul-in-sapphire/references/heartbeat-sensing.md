@@ -38,7 +38,11 @@ copy another installation's paths, database IDs, credentials or schedule.
    Results are `changed`, `no_change`, `unavailable` or `failed`. A missing evidence
    source is a limitation, not proof that nothing changed. With no new state,
    retain the snapshot's original `updated_at`; reading is not a fresh snapshot.
-   Do not create a journal, identity edit or user-profile entry on every check.
+   There is no per-check journal, identity-edit or user-profile quota. When
+   fresh evidence warrants a core-context correction or changed self-understanding,
+   use the installation's core-update owner within the current authority, or
+   carry a dated candidate with original evidence to its existing review path.
+   A light check's narrow scope must not discard that candidate.
    This helper is local-only: it never writes Notion or modifies now-state.json.
    Do not replace it with `node -e`, `python -c`, interpreter stdin/heredocs or
    generated scripts. Hosts with strict inline-eval approval would prompt on
