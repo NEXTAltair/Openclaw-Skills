@@ -138,6 +138,7 @@ async function main() {
       },
     },
     level: { number: {} },
+    scale_version: { number: {} },
     comment: { rich_text: {} },
     weight: { number: {} },
     body_signal: { multi_select: { options: ['tension', 'relief', 'fatigue', 'heat', 'cold'].map(name => ({ name })) } },

@@ -99,6 +99,10 @@ export async function recallExperiences(options, { request = httpJson } = {}) {
       last_edited_time: p.last_edited_time || null, fields: {}, missing_fields: [], truncated_fields: [] };
     for (const [name, type] of Object.entries(fields)) {
       const prop = p.properties?.[name];
+      if (lane === 'emotions' && name === 'scale_version' && (!prop || prop.number === null)) {
+        out.fields[name] = 1; // Legacy records are retained in their original coordinates.
+        continue;
+      }
       if (prop?.type !== type) {
         out.fields[name] = null; out.missing_fields.push(name); note('missing_or_incompatible_field', lane, p.id, name); continue;
       }
@@ -210,7 +214,7 @@ export async function recallExperiences(options, { request = httpJson } = {}) {
 }
 
 const EVENT_FIELDS = { Name:'title', context:'rich_text', when:'date', source:'select', link:'url', trigger:'select', importance:'select', uncertainty:'number', control:'number' };
-const EMOTION_FIELDS = { Name:'title', axis:'select', level:'number', comment:'rich_text', weight:'number', body_signal:'multi_select', need:'select', coping:'select' };
+const EMOTION_FIELDS = { Name:'title', axis:'select', level:'number', scale_version:'number', comment:'rich_text', weight:'number', body_signal:'multi_select', need:'select', coping:'select' };
 const STATE_FIELDS = { Name:'title', when:'date', mood_label:'select', intent:'select', need_stack:'select', need_level:'number', avoid:'multi_select', reason:'rich_text', state_json:'rich_text', source:'select' };
 
 export function parseRecallArgs(argv) {

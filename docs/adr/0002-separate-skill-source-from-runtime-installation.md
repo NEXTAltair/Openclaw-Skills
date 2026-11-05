@@ -96,12 +96,15 @@ source、release、runtime、Workshop candidate、plugin配布物の所有境界
 ### How: どう実装し、どう確認するか
 
 1. workspaceにあったGit履歴を保って`/home/altair/src/Openclaw-Skills`へcloneする。
-2. Workshop候補を選別し、採用品だけsource repositoryへ取り込む。
-3. Git追跡fileだけをstageしてClawHubのdry-run file listを確認する。
-4. releaseをpublishする。
-5. workspaceの旧local copiesをrecoverable backupへ退役させる。
-6. `openclaw skills install @NEXTAltair/<slug>`でreleaseをinstallする。
-7. source/release/runtimeのhash、skill validation、`.clawhub/origin.json`を確認する。
+2. Workshop候補や既存skillの修正をsource repositoryへ取り込む。runtimeだけの修正で完了にしない。
+3. 変更したskillを検証し、対象差分だけをGitへ保存する。公開済み自作skillは変更のたびに公開versionも上げる(2026-11-05本人明示)。
+4. `git archive`等でGit追跡fileだけを別directoryへstageし、ClawHubのdry-run file listを確認する。state/cache/秘密/個人記録を含めない。
+5. owner/slug、現在の公開version、新version、source commitを照合してpublishする。受付が不明なら先にregistryを照合し、再送しない。
+6. registryから新versionを読戻し、downloadした公開fileとstageのhashを照合する。
+7. workspaceの旧local copiesをrecoverable backupへ退役させ、更新先を明示して公開releaseをinstallする。
+8. source/release/runtimeのhash、skill validation、`.clawhub/origin.json`、実際の依存連携を確認する。source保存・publish・公開読戻し・再導入は別の完了状態として記録する。
+
+第三者skillへのローカル拡張や非公開skillは、この公開義務へ含めない。第三者namespaceへpublishせず、拡張元と差分を保全し、一括updateからの保護を設定する。`clawhub pin`はstandalone CLIの保護であり、native OpenClaw updateの保護まで意味しない。公開済み自作skillのpinは、version更新/publishの代用にしない。
 
 ## 検討した選択肢
 

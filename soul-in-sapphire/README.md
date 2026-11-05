@@ -1,5 +1,28 @@
 # soul-in-sapphire
 
+## 2.0.0への更新
+
+**入力尺度の互換性変更:** emotion.level/state軸は中立0、-5..+5。
+新しいtickは`scale_version:2`が必須です。旧0..10入力をそのまま送らないでください。
+既存DBは自動で書き換わりません。writersを一時停止し、全履歴のバックアップ・
+version付き移行・ミラー更新を済ませてから再開してください。
+need/control/uncertainty/weight/imprint severityの尺度は変わりません。
+
+- [尺度と履歴移行](references/emotion-scale.md): 欠損と0、減衰、部分保存のreceipt、現在時刻への投影。
+- [heartbeatの新しい観測](references/heartbeat-sensing.md): 古いquiet結論の再利用を避け、意味のある変化だけ保存。
+- `node --test scripts/*.test.js`でローカルの回帰検証ができます。
+
+## 愚痴・悪口の記録
+
+ユーザーの同意があるとき、手加減した言い換えや最後の褒め言葉を強制せず、
+書き散らした不満も独立したNotion journalとして保存・検索できます。
+日次の内省とは別枠。本文・きっかけ・時点・出典を分け、人物評の事実化はしません。
+後日の追記は任意で、元の記録を上書きしません。怒りの捏造や悪口ノルマもありません。
+
+- [運用・payload・再試行](references/vent-journal.md)
+- `node scripts/vent_journal.js --help`
+- 既存journalを使用。DB/schema/cronの変更不要。保存後の再読一致を検証。
+
 ## Intent (何を意図したスキルか)
 
 OpenClawは「会話ログ」は残る一方で、**人格/気分/学び/その日の余韻**みたいなものは、放っておくと散逸します。
@@ -107,6 +130,7 @@ pnpm dlx clawhub@latest install notion-api-automation
   - `Name` (title)
   - `axis` (select): `arousal|valence|focus|confidence|stress|curiosity|social|solitude|joy|anger|sadness|fun|pain`
   - `level` (number)
+  - `scale_version` (number; 2 = neutral0, -5..+5; missing = legacy0..10)
   - `comment` (rich_text)
   - `weight` (number)
   - `body_signal` (multi-select): `tension|relief|fatigue|heat|cold`
@@ -217,6 +241,7 @@ owner付き配置でも固定の `skills/soul-in-sapphire` パスを仮定しま
 ```bash
 cat <<'JSON' > /tmp/emostate_tick.json
 {
+  "scale_version": 2,
   "event": {
     "title": "...",
     "importance": 4,
@@ -227,8 +252,8 @@ cat <<'JSON' > /tmp/emostate_tick.json
     "control": 8
   },
   "emotions": [
-    {"axis": "joy", "level": 7, "comment": "...", "need": "progress", "coping": "act"},
-    {"axis": "stress", "level": 6, "comment": "...", "need": "safety", "coping": "log"}
+    {"axis": "joy", "level": 2, "comment": "...", "need": "progress", "coping": "act"},
+    {"axis": "stress", "level": 1, "comment": "...", "need": "safety", "coping": "log"}
   ],
   "state": {
     "mood_label": "clear",
@@ -240,11 +265,16 @@ cat <<'JSON' > /tmp/emostate_tick.json
   }
 }
 JSON
-node scripts/emostate_tick.js --payload-file /tmp/emostate_tick.json
+node scripts/emostate_tick.js --ids-file /path/to/verified-ids.json --payload-file /tmp/emostate_tick.json --receipt-file /path/to/tick-receipt.json --mirror-file /path/to/memory/now-state.json
 ```
 
-- stateは時間で5へ戻る(自然減衰)
+- stateは時間で0へ戻る(自然減衰)
 - 強いイベントは `imprints` としてstate_jsonに残る(根に持つ)
+
+感情値・状態軸は中立0、-5..+5。イベントの感情値を減衰後の状態に加える。欠損は0ではない。
+旧0..10の保存履歴は値から5を引いて移行し、versionで識別する。
+解釈・感情の理由はモデルに残し、保存と数値処理だけをスクリプトが担う。
+移行、部分失敗の復旧、現在時刻への投影は [emotion-scale.md](references/emotion-scale.md) を参照。
 
 ### Journal: 1件書く
 
@@ -371,6 +401,28 @@ node scripts/stage_ambient_recall.js --help
 - **記憶の分担**: OpenClawの一般記憶とSoulのNotion経験記憶を、目的に応じて保存・想起する
 
 OpenClawの cron/heartbeat は環境ごとに設定してください。
+
+### heartbeatの観測結果を保存する
+
+判定や感情の解釈はモデルが行い、JSONの更新は専用の
+`scripts/heartbeat_observe.mjs`に任せます。`node -e`で毎回コードを生成しません。
+ネイティブのファイル書き込みツールで次の観測JSONを作成してください。
+
+```json
+{"result":"no_change","reason":"根拠のある今回の判断","evidence_references":{"context":"読んだファイルやツールの参照"}}
+```
+
+```bash
+node scripts/heartbeat_observe.mjs \
+  --workspace /path/to/agent-workspace \
+  --observation-file /path/to/observation.json \
+  --apply
+```
+
+`--apply`なしは確認だけです。`changed`の場合は、正常完了したtickの
+`--receipt-file`も渡します。未完了のreceiptや壊れた既存JSONは上書きしません。
+`ok:true`と`applied:true`を確認してください。既存の無関係なキーを維持し、
+Notionや`memory/now-state.json`は変更しません。ホストの承認設定を緩める必要はありません。
 
 ## Subagent delegation
 
