@@ -5,6 +5,12 @@ import fs from 'node:fs';
 const skill = fs.readFileSync(new URL('../SKILL.md', import.meta.url), 'utf8');
 const delegation = skill.split('## Delegation')[1].split('## Database IDs')[0];
 
+test('metadata discloses existing Notion and authorized local persistence', () => {
+  assert.match(skill, /"localWrites":/);
+  assert.match(skill, /explicitly authorized core-context files/);
+  assert.match(skill, /"modifiesRemoteData":\["notion:databases"/);
+});
+
 test('delegation chooses a host read-only worker, not a fixed agent or lightweight bootstrap', () => {
   assert.doesNotMatch(delegation, /agentId:\s*"analysis-worker"/);
   assert.doesNotMatch(delegation, /lightContext:\s*true/);

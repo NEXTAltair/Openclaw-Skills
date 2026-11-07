@@ -1,7 +1,7 @@
 ---
 name: "soul-in-sapphire"
 description: "Emotion-linked memory recall, self-state, subjective journal, and identity continuity."
-metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_API_KEY","NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH","SIS_AMBIENT_RECALL"]}}
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_API_KEY","NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH","SIS_AMBIENT_RECALL"],"localWrites":["agent workspace memory, state mirrors, journals, and explicitly authorized core-context files"],"modifiesRemoteData":["notion:databases","notion:memory","notion:events","notion:emotions","notion:state","notion:journal"]}}
 ---
 
 # soul-in-sapphire
