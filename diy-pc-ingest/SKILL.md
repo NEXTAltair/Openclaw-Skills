@@ -1,7 +1,7 @@
 ---
 name: "diy-pc-ingest"
-description: "Ingest pasted PC parts receipts or specs into Notion DIY_PC tables with classification, enrichment, follow-up, and upsert."
-metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"optionalEnv":["NOTION_TOKEN","NOTION_API_TOKEN","NOTION_VERSION","NOTIONCTL_PATH"],"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"network":["notion-api","optional:web_search/web_fetch"]}}
+description: "Ingest pasted PC parts receipts or specs into Notion DIY_PC tables with classification, enrichment, verified upsert, and provisional records when serials are unknown."
+metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"primaryEnv":"NOTION_API_KEY"}}
 ---
 
 # diy-pc-ingest
@@ -10,11 +10,34 @@ metadata: {"openclaw":{"requires":{"bins":["node"],"env":["NOTION_API_KEY"]},"op
 
 This skill is intended to be shared. Do **not** hardcode your Notion IDs or token in the skill.
 
-Install the required dependency skill via ClawHub before using this skill:
+Resolve and read the installed Notion dependency before execution:
 
+- Its model-facing skill name is `notion`; its ClawHub package slug is
+  `notion-api-automation`. Read it with `skills_read(name="notion")`.
+  If unavailable, use `skills_search` to locate an eligible Notion CLI skill and
+  read its complete instructions. A slug or directory name is not a skill name.
+- Use the returned `SKILL.md` location to resolve `scripts/notionctl.mjs` on the
+  same execution host as this skill. Do not assume both skills share a parent
+  directory: workspace, grouped, managed, extra and revision paths can differ.
+- Pass that absolute CLI path with `--notionctl-path` (preferred) or set the
+  non-secret `NOTIONCTL_PATH` environment variable. Explicit paths take priority
+  over the legacy sibling/scoped-root fallback; invalid explicit paths fail
+  without searching another route.
+- Check `node <resolved-notionctl-path> --help` for `api`, `--compact`,
+  `--method`, `--path` and `--body-json`. The API bridge must return
+  `{ok:true,result:...}`. Discovery/metadata does not guarantee this capability.
+  Do not reinstall a working dependency just because this skill was updated.
+
+Only if the dependency is missing, use OpenClaw's install path for the intended
+agent (replace `<agent-id>` with the configured agent, not a human profile ID):
+
+```bash
+openclaw skills install @tristanmanchester/notion-api-automation --agent <agent-id>
 ```
-clawhub install notion-api-automation
-```
+
+OpenClaw does not enforce cross-skill dependencies or optional environment
+variables through `dependsOnSkills`, `optionalEnv` or `network` metadata fields.
+The checks above and the data-flow rules below are part of this skill's procedure.
 
 1) Read the `DIY-PC Notion Targets` table in the workspace `AGENTS.md` `## Tools` section for the data_source_id and database_id values for each target. Pass them as explicit CLI arguments:
 - `--pcconfig-dsid`, `--pcconfig-dbid`
@@ -46,12 +69,14 @@ Example SecretRef shape:
 ```
 
 Notes:
-- This skill uses Notion-Version `2025-09-03` by default.
-- If `NOTIONCTL_PATH` is set, `scripts/notion_apply_records.js` uses that
-  notionctl path (missing overrides fail without fallback). Otherwise resolve a sibling
-  dependency, then the unscoped skills root for owner-qualified installs.
-- The dependency must support `api --compact --method --path --body-json` and
-  return `{ok:true,result:...}`. Preserve host-injected auth/proxy environment;
+- The dependency must use Notion-Version `2025-09-03`.
+- `NOTIONCTL_PATH` is an optional, non-secret path override. The dependency CLI
+  can also accept `NOTION_TOKEN` / `NOTION_API_TOKEN`, but this skill's OpenClaw
+  readiness gate still requires `NOTION_API_KEY` or the configured `apiKey`.
+- Auth injection is scoped to the host agent run, not automatically to a
+  sandbox or a different node. Use the configured execution host and credential
+  delivery; do not copy secrets across hosts to make a missing gate pass.
+- Preserve host-injected auth/proxy environment;
   never extract credentials into chat, commands, logs or shell variables.
 
 ## Data flow disclosure
@@ -68,7 +93,7 @@ Security rules:
 
 Use **data_sources** endpoints for schema/query, and **pages** endpoint for row creation.
 
-IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS.md` `## Tools` section. Pass them as CLI arguments at runtime.
+IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS.md` `## Tools` section. Pass them as CLI arguments at runtime. See [references/notion-ids.md](references/notion-ids.md) for lookup and parent-ID rules.
 
 ## Workflow (A: user pastes raw text)
 
@@ -82,7 +107,10 @@ IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS
 3) **Enrich specs using web_search/web_fetch** when it reduces user work (e.g., bay count, interface, capacity, form factor). Keep it minimal; don't overfill.
 
 4) **Ask follow-up questions** only for fields needed to avoid ambiguity or bad joins.
-   - **ストレージ**: Serial missing → ask for serial (or confirm creating as "暫定/シリアル不明").
+   - **ストレージ / PCInput**: Serial missing is allowed. Omit it and proceed with
+     a provisional identity; do not ask solely to obtain a serial. Missing,
+     null, blank, `不明`, `シリアル不明`, `未確認`, `未取得`, `unknown`, `n/a`
+     and `-` are treated as unknown, not shared serial keys.
    - **エンクロージャー**: ベイ数 or USB/Thunderbolt/LAN unclear → ask.
    - **PCConfig**: Identifier/型番 missing but needed to match existing row → ask.
 - If a key collides with multiple rows, do not write; ask user.
@@ -99,23 +127,36 @@ IDs are documented in the `DIY-PC Notion Targets` table in the workspace `AGENTS
 
 ## Commands
 
-Run from the installed skill directory identified by `SKILL.md` (including owner-qualified paths). Keep private input and plan output outside the repository.
+Run from the installed skill directory identified by `SKILL.md` (including owner-qualified paths). Use the dependency path resolved in Setup. Keep private input and plan output outside the repository.
 
 ```bash
-node scripts/notion_apply_records.js --plan --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
-node scripts/notion_apply_records.js --apply --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
+node scripts/notion_apply_records.js --plan --notionctl-path "<RESOLVED_NOTIONCTL_PATH>" --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
+node scripts/notion_apply_records.js --apply --notionctl-path "<RESOLVED_NOTIONCTL_PATH>" --storage-dsid <STORAGE_DS_ID> --storage-dbid <STORAGE_DB_ID> < records.jsonl
 ```
 
 Add `--pcconfig-dsid` / `--pcconfig-dbid` for mirrors. The script reads no config file and does not auto-discover database IDs.
 
 ## Upsert keys (rules)
 
-- **ストレージ**: `シリアル` (exact) is the primary key. If the existing row was created without serial, allow a safe fallback match by title + (optional) `購入日`/`価格(円)` to support post-fill of serial/health/scan-date.
+- **ストレージ**: Use a known `シリアル` as the exact primary key. When unknown,
+  use exact `Name` + provided `購入日` / `価格(円)` as the provisional key.
+  Search only unknown-serial candidates within those descriptive matches. A later
+  known serial first searches its exact key, then the same provisional fallback
+  to fill the existing row. Never join a different known serial by title.
 - **エンクロージャー**: `取り外し表示名` (exact) else title/name.
 - **PCConfig**: `(Name + Purchase Date)` を複合キーとして扱う（exact）。重複ヒット時は書き込まず質問。
-- **PCInput**: `(型番 + Serial + 名前)` is a required composite key.
-- Required keys must be present for automatic upsert; use a verified `page_id` for direct post-fill if the key is missing. Exact queries follow pagination; incomplete queries block writes.
+- **PCInput**: Use `(型番 + Serial + 名前)` when Serial is known. Otherwise use
+  `(型番 + 名前)` + provided `購入日` / `価格(円)` against unknown-Serial rows.
+  A later Serial can post-fill that provisional row without creating another.
+- Required descriptive keys must be present; serial itself is optional for
+  storage and PCInput. Use a verified `page_id` for direct post-fill if identity
+  remains unresolved. Exact queries follow pagination; incomplete queries block writes.
 - If a key collides with multiple rows, do not write; ask user.
+- Two serial-less items with the same provisional identity in one batch block
+  preflight rather than being silently folded together. Combine repeated edits
+  to one item into one record; give separate physical units distinct item names
+  (e.g. a bay/unit suffix), purchase details or verified page IDs. Do not invent
+  fake serial numbers. After a serial is filled, use it or the recorded page ID.
 
 ## JSONL input format for the apply script
 
@@ -129,12 +170,21 @@ Optional control fields (for cleanup / manual fixes):
 - `page_id` (or `id`): update this Notion page directly (bypasses upsert matching)
 - `archive: true`: archive an existing matched or directly addressed page; never creates a row. An already archived direct page is skipped.
 - `overwrite: true`: allow overwriting existing values (including clearing with null)
+  - Unknown serial labels/blank input never erase a known serial. Only explicit
+    `null` together with `page_id`/`id` and `overwrite:true` clears that identity field.
 
 Optional behavior flags:
 - `mirror_to_pcconfig: true` (only for `target=storage`): also create/update a `pcconfig` row for the installed component.
   - requires: `現在の接続先PC`, `購入日`, `Name`
+  - Unknown serials leave mirrored `Spec` empty so a later real serial can fill it.
 
 Targets: `enclosure | storage | pcconfig | pcinput`
+
+Serial-less storage example (registration does not require a serial question):
+
+```json
+{"target":"storage","properties":{"Name":"Example SSD","購入日":"2026-10-05","価格(円)":5000,"メモ":"シリアル未確認"}}
+```
 
 Property value encoding:
 - select/status: string name
@@ -156,7 +206,8 @@ Property value encoding:
 - Legacy Python implementation is reference-only: `scripts/_deprecated/notion_apply_records.py`. Do not use it for plan/apply or as a rejection fallback.
 
 
-## Notion tooling (recommended)
-- Install `notion-api-automation` via ClawHub for Notion API debugging: `clawhub install notion-api-automation`
-- This skill does not depend on `skills/notionkit/*`.
-- Primary ingestion path is `scripts/notion_apply_records.js`; use `skills/notion-api-automation/scripts/notionctl.mjs` for diagnostics/manual API operations.
+## Notion tooling
+- Primary ingestion path is `scripts/notion_apply_records.js`.
+- For diagnostics, use the actual CLI path obtained by reading the installed
+  `notion` skill. Never substitute a fixed `skills/<slug>/...` path or use a
+  different credential/tool route after rejection.

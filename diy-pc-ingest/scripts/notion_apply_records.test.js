@@ -37,6 +37,7 @@ function mock(initial = [], failWrite = 0, badRead = false) {
 const storage = (serial, extra = {}) => ({ target: 'storage', properties: { Name: 'Example SSD', シリアル: serial, ...extra } });
 test('plan defaults and boolean flags reject conflicting/unknown modes', () => {
   assert.deepEqual(parseArgs(['node', 'script', '--plan', '--storage-dsid', 's']), { plan: true, 'storage-dsid': 's' });
+  assert.equal(parseArgs(['node', 'script', '--notionctl-path', '/another/root/notionctl.mjs'])['notionctl-path'], '/another/root/notionctl.mjs');
   assert.throws(() => parseArgs(['node', 'script', '--plan', '--apply']));
   assert.throws(() => parseArgs(['node', 'script', '--preview']));
 });
@@ -61,7 +62,7 @@ test('duplicate key blocks whole batch without writes', async () => {
   assert.deepEqual(r.results[1].matches, ['a', 'b']);
 });
 test('missing keys/mirror fields and unknown properties block preflight', async () => {
-  for (const rec of [{ target: 'storage', title: 'No serial' }, { ...storage('s'), mirror_to_pcconfig: true }, storage('s', { Unknown: 3 }), { target: 'pcconfig', title: 'No date' }]) {
+  for (const rec of [{ target: 'storage', properties: { メモ: 'No identifying name' } }, { ...storage('s'), mirror_to_pcconfig: true }, storage('s', { Unknown: 3 }), { target: 'pcconfig', title: 'No date' }]) {
     const m = mock(); const r = await run([rec], ids, 'apply', m.req);
     assert.equal(r.ok, false); assert.equal(m.writes(), 0);
   }
@@ -96,6 +97,85 @@ test('storage fallback does not join another serial or ignore date mismatch', as
     assert.equal(r.results[0].action, 'create');
   }
 });
+test('missing/blank/unknown serials create provisional storage and repeated runs skip', async () => {
+  for (const serial of [undefined, null, '', '  ', '不明', 'シリアル不明', 'UNKNOWN', 'n/a', '-']) {
+    const m = mock(); const rec = storage(serial, { 購入日: '2026-10-05', '価格(円)': 5000 });
+    const preview = await run([rec], ids, 'plan', m.req);
+    assert.equal(preview.ok, true); assert.equal(m.writes(), 0);
+    assert.equal(preview.results[0].key.シリアル, null);
+    assert.equal(Object.hasOwn(preview.results[0].body.properties, 'シリアル'), false);
+    assert.equal((await run([rec], ids, 'apply', m.req)).summary.created, 1);
+    assert.equal((await run([rec], ids, 'apply', m.req)).summary.skipped, 1);
+    assert.equal(m.writes(), 1);
+  }
+});
+test('a later real serial fills the provisional storage row without a duplicate', async () => {
+  const m = mock(); const purchase = { 購入日: '2026-10-05', '価格(円)': 5000 };
+  const first = await run([storage(undefined, purchase)], ids, 'apply', m.req);
+  const next = await run([storage(' REAL-001 ', { ...purchase, メモ: 'serial now available' })], ids, 'apply', m.req);
+  assert.equal(next.summary.updated, 1); assert.equal(next.results[0].id, first.results[0].id);
+  assert.equal(m.rows.length, 1);
+  assert.equal(m.rows[0].properties.シリアル.rich_text[0].text.content, 'REAL-001');
+  assert.equal((await run([storage('REAL-001', purchase)], ids, 'apply', m.req)).summary.skipped, 1);
+});
+test('legacy unknown-serial labels are post-filled rather than used as common IDs', async () => {
+  const m = mock([row('legacy', 'storage', { Name: 'Example SSD', シリアル: '不明' }), row('unrelated', 'storage', { Name: 'Other SSD', シリアル: '不明' })]);
+  const r = await run([storage('REAL-001')], ids, 'apply', m.req);
+  assert.equal(r.summary.updated, 1); assert.equal(r.results[0].id, 'legacy');
+  assert.equal(m.rows[1].properties.シリアル.rich_text[0].plain_text, '不明');
+});
+test('provisional storage never auto-joins a known serial or a mismatched purchase', async () => {
+  for (const values of [{ シリアル: 'OTHER-001' }, { シリアル: '', 購入日: '2025-01-01' }, { シリアル: '', '価格(円)': 9000 }]) {
+    const m = mock([row('old', 'storage', { Name: 'Example SSD', 購入日: '2026-10-05', '価格(円)': 5000, ...values })]);
+    const r = await run([storage(undefined, { 購入日: '2026-10-05', '価格(円)': 5000 })], ids, 'plan', m.req);
+    assert.equal(r.results[0].action, 'create'); assert.equal(m.writes(), 0);
+  }
+});
+test('duplicate provisional rows and repeated serial-less batch identities block all writes', async () => {
+  const m = mock([row('a', 'storage', { Name: 'Example SSD' }), row('b', 'storage', { Name: 'Example SSD', シリアル: 'unknown' })]);
+  const r = await run([storage(undefined)], ids, 'apply', m.req);
+  assert.equal(r.summary.blocked, 1); assert.equal(m.writes(), 0);
+  assert.deepEqual(r.results[0].matches, ['a', 'b']);
+  const empty = mock();
+  const duplicate = await run([storage(undefined), storage('不明')], ids, 'apply', empty.req);
+  assert.equal(duplicate.summary.blocked, 2); assert.equal(empty.writes(), 0);
+});
+test('distinct purchase identities can create two serial-less devices in one batch', async () => {
+  const m = mock();
+  const r = await run([storage(undefined, { 購入日: '2026-10-04' }), storage(undefined, { 購入日: '2026-10-05' })], ids, 'apply', m.req);
+  assert.equal(r.summary.created, 2); assert.equal(m.rows.length, 2);
+});
+test('partially specified provisional identities cannot silently merge batch units', async () => {
+  for (const records of [[storage(undefined), storage(undefined, { 購入日: '2026-10-05' })], [storage(undefined, { 購入日: '2026-10-05' }), storage(undefined)]]) {
+    const m = mock(); const r = await run(records, ids, 'apply', m.req);
+    assert.equal(r.summary.blocked, 2); assert.equal(m.writes(), 0);
+  }
+});
+test('unknown serial input does not erase a known direct-page serial, even with overwrite', async () => {
+  const m = mock([row('known', 'storage', { Name: 'Example SSD', シリアル: 'REAL-001' })]);
+  const r = await run([{ target: 'storage', page_id: 'known', overwrite: true, properties: { シリアル: '不明', メモ: 'additional info' } }], ids, 'apply', m.req);
+  assert.equal(r.summary.updated, 1); assert.equal(m.rows[0].properties.シリアル.rich_text[0].plain_text, 'REAL-001');
+  const cleared = await run([{ target: 'storage', page_id: 'known', overwrite: true, properties: { シリアル: null } }], ids, 'apply', m.req);
+  assert.equal(cleared.summary.updated, 1); assert.equal(m.rows[0].properties.シリアル.rich_text[0].text.content, '');
+});
+test('PCInput permits unknown Serial and later fills the same model/name row', async () => {
+  const m = mock(); const rec = { target: 'pcinput', properties: { 名前: 'Example keyboard', 型番: 'KB-01', 購入日: '2026-10-05' } };
+  const first = await run([rec], ids, 'apply', m.req);
+  assert.equal(first.summary.created, 1);
+  assert.equal((await run([rec], ids, 'apply', m.req)).summary.skipped, 1);
+  const filled = await run([{ ...rec, properties: { ...rec.properties, Serial: 'KB-SERIAL' } }], ids, 'apply', m.req);
+  assert.equal(filled.summary.updated, 1); assert.equal(filled.results[0].id, first.results[0].id);
+  assert.equal(m.rows.length, 1);
+});
+test('unknown-serial storage mirrors leave Spec empty so later serial post-fill works', async () => {
+  const m = mock(); const details = { 現在の接続先PC: 'Test PC', 購入日: '2026-10-05' };
+  const rec = { ...storage(undefined, details), mirror_to_pcconfig: true };
+  assert.equal((await run([rec], ids, 'apply', m.req)).summary.created, 2);
+  assert.equal(m.rows.find(r => r.parent.data_source_id === 'pcconfig').properties.Spec, undefined);
+  const filled = await run([{ ...storage('REAL-001', details), mirror_to_pcconfig: true }], ids, 'apply', m.req);
+  assert.equal(filled.summary.updated, 2);
+  assert.equal(m.rows.find(r => r.parent.data_source_id === 'pcconfig').properties.Spec.rich_text[0].text.content, 'S/N: REAL-001');
+});
 test('mirror is idempotent and mirror failure retains primary success', async () => {
   const rec = { ...storage('s', { 現在の接続先PC: 'Test PC', 購入日: '2026-01-01' }), mirror_to_pcconfig: true };
   const m = mock([], 2); const first = await run([rec], ids, 'apply', m.req);
@@ -121,6 +201,10 @@ test('notionctl resolves unscoped, scoped sibling, scoped-to-root and explicit o
   assert.equal(notionctlPath(path.join(root, '@owner/diy-pc-ingest/scripts'), ''), scoped);
   assert.equal(notionctlPath('/absent', rootDep), rootDep);
   assert.throws(() => notionctlPath('/absent', path.join(root, 'missing')));
+  assert.throws(() => notionctlPath('/absent', root), /not a file/);
+  const separate = path.join(root, 'extra/group/notion/scripts/notionctl.mjs');
+  fs.mkdirSync(path.dirname(separate), { recursive: true }); fs.writeFileSync(separate, '');
+  assert.equal(notionctlPath(path.join(root, 'workspace/skills/group/diy-pc-ingest/scripts'), separate), separate);
 });
 test('CLI plan/dry-run/default use notionctl api contract without write calls; envelope rejection fails', () => {
   const { spawnSync } = require('node:child_process');
@@ -142,6 +226,10 @@ test('CLI plan/dry-run/default use notionctl api contract without write calls; e
   }
   const calls = fs.readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
   assert.ok(calls.every(c => c.method === 'GET' || (c.method === 'POST' && c.endpoint.endsWith('/query'))));
+  const explicit = spawnSync(process.execPath, [path.join(__dirname, 'notion_apply_records.js'), '--plan', '--notionctl-path', cli, '--storage-dsid', 'storage', '--storage-dbid', 'storage-db'], { input: JSON.stringify(storage(undefined)), encoding: 'utf8', env: { ...process.env, NOTIONCTL_PATH: path.join(root, 'missing') } });
+  assert.equal(explicit.status, 0, explicit.stderr);
+  assert.equal(JSON.parse(explicit.stdout).results[0].key.シリアル, null);
+  assert.equal(Object.hasOwn(JSON.parse(explicit.stdout).results[0].body.properties, 'シリアル'), false);
   const r = spawnSync(process.execPath, [path.join(__dirname, 'notion_apply_records.js'), '--apply', '--storage-dsid', 'storage', '--storage-dbid', 'storage-db'], { input: JSON.stringify(storage('fixture')), encoding: 'utf8', env: { ...process.env, NOTIONCTL_PATH: cli, DIY_TEST_REJECT: '1' } });
   assert.equal(r.status, 1); assert.equal(JSON.parse(r.stdout).summary.blocked, 1);
 });

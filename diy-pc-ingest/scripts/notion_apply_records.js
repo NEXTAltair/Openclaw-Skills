@@ -34,7 +34,7 @@ const TARGET_SCHEMA = {
 function parseArgs(argv) {
   const out = {};
   const flags = new Set(['plan', 'dry-run', 'apply']);
-  const values = new Set(Object.keys(TARGET_SCHEMA).flatMap(t => [`${t}-dsid`, `${t}-dbid`]));
+  const values = new Set(['notionctl-path', ...Object.keys(TARGET_SCHEMA).flatMap(t => [`${t}-dsid`, `${t}-dbid`])]);
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i].replace(/^--/, '');
     if (!argv[i].startsWith('--') || (!flags.has(k) && !values.has(k))) throw new Error(`Unknown argument: ${argv[i]}`);
@@ -69,7 +69,7 @@ function notionVersion() {
 function notionctlPath(here = __dirname, override = process.env.NOTIONCTL_PATH) {
   if (override) {
     const explicit = override.startsWith('~/') ? path.join(require('node:os').homedir(), override.slice(2)) : override;
-    if (!fs.existsSync(explicit)) throw new Error('NOTIONCTL_PATH does not exist');
+    if (!fs.statSync(explicit, { throwIfNoEntry: false })?.isFile()) throw new Error('Configured notionctl path is not a file');
     return explicit;
   }
   const parent = path.resolve(here, '../..');
@@ -77,7 +77,7 @@ function notionctlPath(here = __dirname, override = process.env.NOTIONCTL_PATH) 
   if (path.basename(parent).startsWith('@')) roots.push(path.dirname(parent));
   const candidates = roots.map(root => path.join(root, 'notion-api-automation/scripts/notionctl.mjs'));
   const found = candidates.find(p => fs.existsSync(p));
-  if (!found) throw new Error('notionctl not found; install notion-api-automation or set NOTIONCTL_PATH');
+  if (!found) throw new Error('notionctl not found; locate the installed notion skill and pass --notionctl-path or set NOTIONCTL_PATH');
   return found;
 }
 
@@ -85,10 +85,10 @@ function safeEnv(extra = {}) {
   return { ...process.env, ...extra };
 }
 
-async function notionReq(method, apiPath, body) {
+async function notionReq(method, apiPath, body, cliOverride = process.env.NOTIONCTL_PATH) {
   const p = String(apiPath).startsWith('/v1/') ? String(apiPath) : `/v1${String(apiPath).startsWith('/') ? '' : '/'}${String(apiPath)}`;
   const args = [
-    notionctlPath(),
+    notionctlPath(__dirname, cliOverride),
     'api',
     '--compact',
     '--method', String(method).toUpperCase(),
@@ -100,7 +100,7 @@ async function notionReq(method, apiPath, body) {
 
   let out = '';
   try {
-    out = execFileSync('node', args, { encoding: 'utf-8', env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    out = execFileSync(process.execPath, args, { encoding: 'utf-8', env, stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   } catch (err) {
     const stdout = err?.stdout ? String(err.stdout).trim() : '';
     const stderr = err?.stderr ? String(err.stderr).trim() : '';
@@ -241,34 +241,59 @@ function unique(rows, key) {
   return rows[0] || null;
 }
 
+function serialProperty(target) {
+  return target === 'storage' ? 'シリアル' : target === 'pcinput' ? 'Serial' : null;
+}
+
+function unknownSerial(value) {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  return !text || /^(?:不明|シリアル不明|未確認|未取得|unknown|n\/a|-)$/i.test(text);
+}
+
+function hasValue(value) {
+  return value !== null && value !== undefined && (typeof value !== 'string' || Boolean(value.trim()));
+}
+
+function keyFilter(schema, name, value) {
+  const type = schema.properties?.[name]?.type;
+  if (!['title', 'rich_text', 'date', 'number'].includes(type)) throw new Error(`Unsupported key schema: ${name}`);
+  return { property: name, [type]: { equals: value } };
+}
+
 async function findExisting(ids, target, schema, propsIn, req = notionReq) {
   const cfg = ids[target];
-  const filled = k => propsIn[k] !== null && propsIn[k] !== undefined && propsIn[k] !== '';
+  const filled = k => hasValue(propsIn[k]);
+  const serial = serialProperty(target);
+  const knownSerial = serial && !unknownSerial(propsIn[serial]);
   let keys;
-  if (target === 'pcconfig' || target === 'pcinput') keys = cfg.key;
+  if (target === 'pcconfig') keys = cfg.key;
+  else if (target === 'pcinput') keys = knownSerial ? cfg.key : ['型番', cfg.title_prop];
   else if (target === 'enclosure') keys = [filled('取り外し表示名') ? '取り外し表示名' : cfg.title_prop];
-  else keys = ['シリアル'];
+  else keys = knownSerial ? ['シリアル'] : [cfg.title_prop];
   if (!keys.every(filled)) {
     const err = new Error('Missing upsert key');
     err.details = { missing: keys.filter(k => !filled(k)) };
     throw err;
   }
-  const filters = keys.map(k => {
-    const type = schema.properties?.[k]?.type;
-    if (!['title', 'rich_text', 'date', 'number'].includes(type)) throw new Error(`Unsupported key schema: ${k}`);
-    return { property: k, [type]: { equals: propsIn[k] } };
-  });
   const key = Object.fromEntries(keys.map(k => [k, propsIn[k]]));
-  const exact = unique(await queryAll(req, cfg.data_source_id, filters.length === 1 ? filters[0] : { and: filters }), key);
-  if (exact || target !== 'storage' || !propsIn.Name) return { row: exact, key };
-  // Serial post-fill is allowed only for an exact title with an empty serial.
-  const fallback = [
-    { property: cfg.title_prop, title: { equals: propsIn.Name } },
-    { property: 'シリアル', rich_text: { is_empty: true } },
-  ];
-  if (filled('購入日')) fallback.push({ property: '購入日', date: { equals: propsIn['購入日'] } });
-  if (filled('価格(円)')) fallback.push({ property: '価格(円)', number: { equals: propsIn['価格(円)'] } });
-  return { row: unique(await queryAll(req, cfg.data_source_id, { and: fallback }), key), key };
+  if (!serial || knownSerial) {
+    const filters = keys.map(k => keyFilter(schema, k, propsIn[k]));
+    const exact = unique(await queryAll(req, cfg.data_source_id, filters.length === 1 ? filters[0] : { and: filters }), key);
+    if (exact || !serial) return { row: exact, key };
+  }
+  if (!filled(cfg.title_prop)) return { row: null, key };
+  // Match provisional identities only against other unknown-serial rows.
+  // Query by descriptive fields, then filter locally so legacy "不明" labels
+  // are not mistaken for real shared serials or for another physical device.
+  const fallbackKeys = target === 'pcinput' ? ['型番', cfg.title_prop] : [cfg.title_prop];
+  for (const k of ['購入日', '価格(円)']) if (filled(k)) fallbackKeys.push(k);
+  const fallback = fallbackKeys.map(k => keyFilter(schema, k, propsIn[k]));
+  const fallbackKey = knownSerial ? key : { ...Object.fromEntries(fallbackKeys.map(k => [k, propsIn[k]])), [serial]: null };
+  const serialType = schema.properties?.[serial]?.type;
+  if (serialType !== 'rich_text') throw new Error(`Unsupported serial schema: ${serial}`);
+  const rows = await queryAll(req, cfg.data_source_id, fallback.length === 1 ? fallback[0] : { and: fallback });
+  return { row: unique(rows.filter(r => unknownSerial(canonical(r.properties?.[serial], serialType))), fallbackKey), key: fallbackKey };
 }
 
 function requireIds(ids, target) {
@@ -300,7 +325,7 @@ function expandRecords(records) {
       missing,
       properties: { PC: p['現在の接続先PC'], Category: 'ストレージ', Name: p.Name,
         'Purchase Date': p['購入日'], 'Purchase Vendor': p['購入店'], 'Purchase Price': p['価格(円)'],
-        Spec: `S/N: ${p['シリアル'] || ''}`, Installed: true, Active: true, Notes: 'mirrored from storage' },
+        Spec: unknownSerial(p['シリアル']) ? undefined : `S/N: ${String(p['シリアル']).trim()}`, Installed: true, Active: true, Notes: 'mirrored from storage' },
     }];
   });
 }
@@ -317,6 +342,13 @@ async function planRecord(rec, ids, req) {
   const props = { ...rec.properties };
   if (rec.title && !props[cfg.title_prop]) props[cfg.title_prop] = rec.title;
   const pageId = rec.page_id || rec.id;
+  const serial = serialProperty(rec.target);
+  if (serial && Object.hasOwn(props, serial)) {
+    // Unknown is absence, not a shared identifier and not a request to erase a
+    // known serial. Explicit null + overwrite on a verified page is still a clear.
+    if (unknownSerial(props[serial]) && !(pageId && rec.overwrite && props[serial] === null)) delete props[serial];
+    else if (props[serial] !== null) props[serial] = String(props[serial]).trim();
+  }
   const archive = Boolean(rec.archive || rec.archived);
   let existing, key;
   if (pageId) {
@@ -332,7 +364,9 @@ async function planRecord(rec, ids, req) {
   if (existing && !existing.id) throw new Error('Invalid page response');
   if (existing?.archived && Object.keys(props).length) throw new Error('Cannot edit archived page');
   if (!existing && !props[cfg.title_prop]) throw new Error('Missing title for creation');
-  const patch = buildPatch(schema, props, existing?.properties || {}, Boolean(rec.overwrite));
+  const existingProps = { ...existing?.properties };
+  if (serial && unknownSerial(canonical(existingProps[serial], 'rich_text'))) delete existingProps[serial];
+  const patch = buildPatch(schema, props, existingProps, Boolean(rec.overwrite));
   const body = {};
   if (Object.keys(patch).length) body.properties = patch;
   if (archive && !existing.archived) body.archived = true;
@@ -365,6 +399,28 @@ async function run(records, ids, mode = 'plan', transport = notionReq) {
   for (const rec of expanded) {
     try { plans.push(await planRecord(rec, ids, req)); }
     catch (e) { plans.push({ index: rec.index, lane: rec.lane, target: rec.target, action: 'blocked', error: e.message, ...e.details }); }
+  }
+  // Identical descriptions are not proof that two serial-less batch items are
+  // the same device. Require distinct names/page IDs instead of silently folding
+  // two physical units into the first newly created row.
+  const provisional = new Map();
+  for (const p of plans) {
+    const serial = serialProperty(p.target);
+    if (!serial || p.action === 'blocked' || !Object.hasOwn(p.key || {}, serial) || p.key[serial] !== null) continue;
+    const names = p.target === 'pcinput' ? ['型番', '名前'] : ['Name'];
+    const identity = JSON.stringify([p.target, ...names.map(k => p.key[k])]);
+    const candidates = provisional.get(identity) || [];
+    for (const earlier of candidates) {
+      // A missing purchase detail cannot distinguish an undated item from a
+      // dated one; only conflicting supplied details establish separate keys.
+      if (['購入日', '価格(円)'].some(k => Object.hasOwn(earlier.key, k) && Object.hasOwn(p.key, k) && earlier.key[k] !== p.key[k])) continue;
+      for (const item of [earlier, p]) {
+        item.action = 'blocked';
+        item.error = 'Repeated provisional identity; use distinct item names or verified page IDs';
+      }
+    }
+    candidates.push(p);
+    provisional.set(identity, candidates);
   }
   const blocked = plans.some(p => p.action === 'blocked');
   if (mode === 'plan' || blocked) {
@@ -408,7 +464,8 @@ async function run(records, ids, mode = 'plan', transport = notionReq) {
 async function main() {
   const args = parseArgs(process.argv);
   const records = fs.readFileSync(0, 'utf8').split(/\r?\n/).filter(s => s.trim()).map(s => JSON.parse(s));
-  const result = await run(records, idsFromArgs(args), args.apply ? 'apply' : 'plan');
+  const transport = (method, endpoint, body) => notionReq(method, endpoint, body, args['notionctl-path'] ?? process.env.NOTIONCTL_PATH);
+  const result = await run(records, idsFromArgs(args), args.apply ? 'apply' : 'plan', transport);
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exitCode = 1;
 }
