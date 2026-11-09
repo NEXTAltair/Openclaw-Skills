@@ -8,6 +8,7 @@ Openclaw-Skills の重要な設計判断を記録するドキュメント群。
 | [0002](0002-separate-skill-source-from-runtime-installation.md) | skill の authoring source と runtime installation を分離する | 2026-09-02 | Accepted |
 | [0003](0003-preserve-relational-reflection-without-asserting-user-psychology.md) | 関係的な推論を残しつつユーザー心理を事実化しない | 2026-09-03 | Accepted |
 | [0004](0004-soul-memory-ownership-and-gated-migration.md) | Notion の感情付き経験記憶を保持した責務整理 | 2026-09-06 | Accepted (Notion退役案を撤回) |
+| [0005](0005-calibre-skills-stay-separate-for-now.md) | Calibre の3スキルは当面個別公開し、将来のプラグイン一本化を見直し対象に残す | 2026-11-09 | Accepted (暫定) |
 
 ## ADR テンプレート
 
