@@ -72,6 +72,7 @@ ingest README の併用前提の記載と、3スキルの ClawHub 公開・再�
 - 共通処理 (run_store / run_state / handle_completion、接続・認証) の不具合を2スキル以上で直すことになったとき。
 - 1つのスキルの変更が他スキルとの同時リリースを必要としたとき。
 - OpenClaw / ClawHub 側でバンドルプラグインの skill 配布と更新追跡を実際に確認できたとき。
+- OpenClaw の Skill SDK・スキル仕様が変わったとき (SKILL.md frontmatter / metadata、`dependsOnSkills` などスキル間依存の扱い、インストール配置、プラグイン・バンドルでの skill 配布、ClawHub の公開・更新方式など)。OpenClaw のリリースノートで skills 関連の変更を見たら、この ADR を開いて判断し直す。
 - 遅くとも 2027-05 頃に一度、利用状況と上記の発生有無を見直す。
 
 ## 検証
