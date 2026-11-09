@@ -8,7 +8,7 @@
 
 ## 背景
 
-`/home/altair/.openclaw/workspace/val/skills` は、OpenClaw が実行時に読む
+`~/.openclaw/workspace/val/skills` は、OpenClaw が実行時に読む
 skill 配置先である一方、`NEXTAltair/Openclaw-Skills` の Git checkout としても
 使われていた。
 
@@ -66,10 +66,10 @@ source checkout と runtime install 先を同一 directory にすると、次の
 変更後は次のように分離する。
 
 ```text
-/home/altair/src/Openclaw-Skills/
+~/src/Openclaw-Skills/
   Git管理された authoring source
 
-/home/altair/.openclaw/workspace/val/skills/
+~/.openclaw/workspace/val/skills/
   ClawHub install、private runtime skill、plugin symlink
 ```
 
@@ -83,8 +83,8 @@ runtime配置先の混在が確認されたため決定した。
 
 ### Where: どこを変えるか
 
-- source: `/home/altair/src/Openclaw-Skills`
-- runtime: `/home/altair/.openclaw/workspace/val/skills`
+- source: `~/src/Openclaw-Skills`
+- runtime: `~/.openclaw/workspace/val/skills`
 - registry: `@NEXTAltair/*` ClawHub releases
 - decision log: `docs/adr/`
 
@@ -95,7 +95,7 @@ source、release、runtime、Workshop candidate、plugin配布物の所有境界
 
 ### How: どう実装し、どう確認するか
 
-1. workspaceにあったGit履歴を保って`/home/altair/src/Openclaw-Skills`へcloneする。
+1. workspaceにあったGit履歴を保って`~/src/Openclaw-Skills`へcloneする。
 2. Workshop候補や既存skillの修正をsource repositoryへ取り込む。runtimeだけの修正で完了にしない。
 3. 変更したskillを検証し、対象差分だけをGitへ保存する。公開済み自作skillは変更のたびに公開versionも上げる(2026-11-05本人明示)。
 4. `git archive`等でGit追跡fileだけを別directoryへstageし、ClawHubのdry-run file listを確認する。state/cache/秘密/個人記録を含めない。
@@ -132,7 +132,7 @@ source、公開release、runtime snapshotの境界が明確になり、version�
 
 ## 決定
 
-- `/home/altair/src/Openclaw-Skills`を唯一のauthoring sourceとする。
+- `~/src/Openclaw-Skills`を唯一のauthoring sourceとする。
 - 公開済み自作skillはClawHub releaseからworkspaceへinstallする。
 - ClawHub installがworkspace内へ物理copyを作ることを正常な配備状態とする。
 - plugin-owned symlinkはplugin lifecycleへ委ねる。
@@ -166,7 +166,7 @@ source、公開release、runtime snapshotの境界が明確になり、version�
 
 1. workspaceの対象ClawHub skillをuninstallする。
 2. 保存済みworkspace backupから旧配置を復元するか、source directoryからlocal installする。
-3. source repository自体は`/home/altair/src/Openclaw-Skills`に保持する。
+3. source repository自体は`~/src/Openclaw-Skills`に保持する。
 4. runtime hashとskill validationを再確認する。
 
 ## 検証

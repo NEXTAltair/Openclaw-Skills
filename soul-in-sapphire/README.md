@@ -345,7 +345,7 @@ runtime state は skill repo ではなく agent workspace に置きます。
 
 ```bash
 node scripts/stage_ambient_recall.js \
-  --workspace ~/.openclaw/workspace/val \
+  --workspace <OPENCLAW_WORKSPACE> \
   --timezone Asia/Tokyo \
   --ttl-minutes 120 \
   --daily-cap 10
@@ -355,7 +355,7 @@ Notion-backed shelf も使う場合は、必要な data source / database IDs �
 
 ```bash
 node scripts/stage_ambient_recall.js \
-  --workspace ~/.openclaw/workspace/val \
+  --workspace <OPENCLAW_WORKSPACE> \
   --timezone Asia/Tokyo \
   --state-dsid <STATE_DS_ID> \
   --journal-dsid <JOURNAL_DS_ID> \

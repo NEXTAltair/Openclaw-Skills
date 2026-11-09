@@ -6,12 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a custom **OpenClaw skills repository** containing self-contained agent skill packages. Each skill directory is independently installable via ClawHub. Skills installed from ClawHub are excluded from git via `.gitignore`.
 
-**Custom (tracked) skills:**
-- `calibre-catalog-read` — Read-only Calibre library lookup and AI-assisted book analysis
-- `calibre-metadata-apply` — Calibre metadata editing with dry-run safety gates
-- `diy-pc-ingest` — Parse PC part receipts/specs and upsert into Notion
-- `soul-in-sapphire` — Long-term memory, state tracking, and continuity via Notion
-- `rr-renamer` — Windows bulk file renamer (PowerShell, RenameRegex)
+**Custom (tracked) skills:** see the "Included custom skills" list in `README.md`.
+Every tracked top-level skill directory must appear there. Published skills are released
+to ClawHub as `@NEXTAltair/<slug>` (the slug can differ from the directory name, e.g.
+`openclaw-model-catalog-migration` is published as `model-catalog-migration`).
 
 ## Skill Structure Convention
 
@@ -49,10 +47,10 @@ metadata:
 
 ## Scripting Conventions
 
-- **Node.js**: Use `.mjs` (ESM modules), invoked as `node scripts/foo.mjs`
-- **Python**: Use `uv run python scripts/foo.py` (not bare `python`)
+- **Node.js**: Prefer ESM (`.mjs`, or `.js` with `"type": "module"` in the skill's `package.json`). Some existing `.js` scripts are CommonJS (`diy-pc-ingest`). Tests run with `node --test`
+- **Python**: Invoke as `python3 scripts/foo.py` (not bare `python`); tests run with `python3 -m unittest discover -s tests`
 - **Bash**: Lightweight API glue (`curl` + `jq`); used for Home Assistant, Sonos
-- **PowerShell**: Windows-only skills (e.g., `rr-renamer`)
+- **PowerShell**: Windows-only skills
 
 ## Execution Model Patterns
 

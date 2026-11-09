@@ -10,6 +10,7 @@
 - diy-pc-ingest
 - accidental-registry-publication-response
 - compare-evolving-online-services
+- haos-ssh-maintenance
 - home-assistant-causal-incident-analysis
 - host-dependency-triage
 - mcp-http-auth-fallback-diagnosis
