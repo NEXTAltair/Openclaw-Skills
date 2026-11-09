@@ -4,6 +4,16 @@
 
 常設の自動保存指示がある場合は、個別の依頼を待たず処理する。Webクリップは対象外。検索結果全件や未使用の候補を収集せず、重複も再登録しない。成功の定型報告は省き、失敗や判断が必要な場合は知らせる。
 
+## 組み合わせるスキル
+
+このスキルは「新しい本の追加」だけを担当する。次の2つと組み合わせて使う前提で、単体では重複確認や既存タグの修正ができない。
+
+- [calibre-catalog-read](https://clawhub.ai/nextaltair/skills/calibre-catalog-read): 取り込み前の重複確認、似た書名・既存タグ語彙の確認(読み取り専用)。
+- [calibre-metadata-apply](https://clawhub.ai/nextaltair/skills/calibre-metadata-apply): 既存の本のタグやメタデータの変更。このスキルは既存の本を書き換えない。
+
+    openclaw skills install @nextaltair/calibre-catalog-read
+    openclaw skills install @nextaltair/calibre-metadata-apply
+
 ## 対象
 
 - 電子書籍原本: PDF、EPUB/KEPUB、MOBI、AZW/AZW3/AZW4、PRC、FB2、DjVu、CBZ/CBR/CB7。
