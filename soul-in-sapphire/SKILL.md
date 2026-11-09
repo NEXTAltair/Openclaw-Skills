@@ -1,7 +1,7 @@
 ---
 name: "soul-in-sapphire"
 description: "Emotion-linked memory recall, self-state, subjective journal, and identity continuity."
-metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_API_KEY","NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH","SIS_AMBIENT_RECALL"],"localWrites":["agent workspace memory, state mirrors, journals, and explicitly authorized core-context files"],"modifiesRemoteData":["notion:databases","notion:memory","notion:events","notion:emotions","notion:state","notion:journal"]}}
+metadata: {"openclaw":{"emoji":"💠","requires":{"bins":["node"]},"primaryEnv":"NOTION_API_KEY","dependsOnSkills":["notion-api-automation"],"optionalEnv":["NOTION_API_KEY","NOTION_TOKEN","NOTION_API_TOKEN","NOTIONCTL_PATH","SIS_AMBIENT_RECALL","SIS_INTEREST_SLOT_FILE"],"localWrites":["agent workspace memory, state mirrors, journals, and explicitly authorized core-context files"],"modifiesRemoteData":["notion:databases","notion:memory","notion:events","notion:emotions","notion:state","notion:journal"]}}
 ---
 
 # soul-in-sapphire
@@ -14,6 +14,7 @@ Use for continuity maintenance and relational self-reflection. For maintenance, 
 - Keep Notion memory as an active part of Soul: what Valentina experienced, how she felt, and the resulting self-state. Emotion labels and event/emotion/state relations carry meaning; preserve them when remembering, not just when writing.
 - A similar fact in both stores does not prove duplication. Compare the remembered event, emotional meaning, provenance, and intended use before changing either path. Do not demote Notion memory to an archive or retire its writer/search because OpenClaw search works.
 - Keep subjective journals distinct from Dreaming reports. Preserve existing mirrors and new self-data without automatically promoting inferred user psychology into core memory.
+- Coordinate with OpenClaw default memory across three recall lanes: (1) OpenClaw curated/prospective memory (`MEMORY.md`, `USER.md`, Trigger Recall, Standing Intents) and deep search (`memory_search`, Active Memory, Dreaming consolidation), (2) Soul contextual recall of externally injected ongoing interests (`soul_interest_slot` v1 via `normalizeInterestSlot` / `buildContextualInterestRecall` in `scripts/memory_policy.js`), and (3) Soul ambient recall (`stage_ambient_recall.js` / `read_ambient_recall.js`, including the optional `interest` shelf on roll 7 when `--interest-slot-file` or `SIS_INTEREST_SLOT_FILE` is supplied). Keep private host paths out of this public skill; adapters pass standard `soul_interest_slot` payloads from the host workspace.
 - Read [references/memory-transition.md](references/memory-transition.md) before changing recall routes or deployment. Notion LTM write/search and five-DB setup remain normal entrypoints; ambient recall stays enabled unless explicitly paused.
 
 ## Entrypoints
@@ -161,7 +162,8 @@ Journal:
 Continuity helpers:
 - `state_recall.js`: pull recent historical state snapshots ordered by event time; `--current` adds a separately labelled current-time projection without changing records.
 - `experience_recall.js`: event lookup plus bounded, schema-validated historical emotion/state relations; does not join mem by inference.
-- `stage_ambient_recall.js` / `read_ambient_recall.js`: ambient staging and separate consumption receipts; SIS_AMBIENT_RECALL=0 pauses both.
+- `stage_ambient_recall.js` / `read_ambient_recall.js`: ambient staging (shelves: `recent`, `unresolved`, `durable`, `dream`, and optional `interest` via `--interest-slot-file` / `SIS_INTEREST_SLOT_FILE`) and separate consumption receipts; SIS_AMBIENT_RECALL=0 pauses both.
+- `memory_policy.js`: `ambientEnabled`, `normalizeInterestSlot`, and `buildContextualInterestRecall` for portable `soul_interest_slot` v1 validation and contextual recall formatting.
 - `continuity_check.js`: distinguish stable traits from temporary drift.
 - `identity_diff.js`: compare current vs proposed identity text.
 - `conflict_track.js`: log unresolved tension before changing identity.

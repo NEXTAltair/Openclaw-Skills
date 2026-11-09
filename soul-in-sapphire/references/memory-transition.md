@@ -24,6 +24,31 @@ autobiographical experience memory or the subjective journal. An OpenClaw search
 success cannot authorize retirement of a Notion writer/reader or the ambient
 experience-memory path. Notion availability and core search quality are separate.
 
+## Three-lane recall and external interest slot
+
+Soul and OpenClaw default memory complement each other by separating what is
+remembered and when it fires:
+
+1. **OpenClaw default memory (`memory-core` + `active-memory`)**: owns curated
+   facts and directives (`MEMORY.md`, `USER.md`, rule-based Trigger Recall),
+   event-conditioned reminders (`intent` / Standing Intents), episodic Markdown
+   search (`memory_search`, Active Memory sub-agent), and Dreaming consolidation.
+   Keep `active-memory` on `mode: "escalate"` (or a dedicated fast model) and
+   do not inject conversational Soul context into internal `:active-memory:`
+   sub-agent sessions.
+2. **Soul contextual recall (per-turn)**: accepts an external interest slot
+   (`kind: "soul_interest_slot"`, `version: 1`) validated by
+   `normalizeInterestSlot` and formatted by `buildContextualInterestRecall` in
+   `scripts/memory_policy.js`. Host adapters convert local working ledgers into
+   this portable schema so public skill code never hardcodes private paths.
+   JSON-backed working ledgers remain outside OpenClaw Markdown Dreaming
+   promotion while Markdown sketches created from those interests remain
+   searchable by `memory_search`.
+3. **Soul ambient recall (periodic/stochastic)**: `stage_ambient_recall.js`
+   rolls across `recent` (1-3), `unresolved` (4), `durable` (5), `dream` (6),
+   and `interest` (7, when `--interest-slot-file` or `SIS_INTEREST_SLOT_FILE` is
+   provided).
+
 ## Observe generation separately from use
 
 Ambient recall remains enabled by default. SIS_AMBIENT_RECALL accepts 0 or 1;

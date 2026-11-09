@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import crypto from 'node:crypto';
-import { ambientEnabled } from './memory_policy.js';
+import { ambientEnabled, normalizeInterestSlot } from './memory_policy.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -35,6 +35,7 @@ Options:
   --journal-dsid <id>      Notion journal data source id for recent shelf.
   --mem-dsid <id>          Notion memory data source id for durable shelf.
   --mem-dbid <id>          Notion memory database id for durable shelf.
+  --interest-slot-file <p> Optional external soul_interest_slot JSON file for interest shelf.
   --force-roll <1-100>     Force a deterministic roll for verification.
   --dry-run                Do not write state or staged recall files.
   --help, -h               Show this help and exit without rolling.
@@ -78,6 +79,7 @@ function parseArgs(argv) {
     journalDsid: '',
     memDsid: '',
     memDbid: '',
+    interestSlotFile: process.env.SIS_INTEREST_SLOT_FILE || '',
     forceRoll: null,
     dryRun: false,
     timezone: process.env.SIS_AMBIENT_TIMEZONE || DEFAULT_TIMEZONE,
@@ -96,6 +98,7 @@ function parseArgs(argv) {
     else if (a === '--journal-dsid') out.journalDsid = argv[++i] || '';
     else if (a === '--mem-dsid') out.memDsid = argv[++i] || '';
     else if (a === '--mem-dbid') out.memDbid = argv[++i] || '';
+    else if (a === '--interest-slot-file') out.interestSlotFile = argv[++i] || '';
     else if (a === '--force-roll') out.forceRoll = parseNumber(argv[++i], null);
     else if (a === '--dry-run') out.dryRun = true;
   }
@@ -104,6 +107,11 @@ function parseArgs(argv) {
   out.stateDir = expandHome(out.stateDir);
   if (!path.isAbsolute(out.stateDir)) out.stateDir = path.join(out.workspace, out.stateDir);
   out.stateDir = path.resolve(out.stateDir);
+  if (out.interestSlotFile) {
+    out.interestSlotFile = expandHome(out.interestSlotFile);
+    if (!path.isAbsolute(out.interestSlotFile)) out.interestSlotFile = path.join(out.workspace, out.interestSlotFile);
+    out.interestSlotFile = path.resolve(out.interestSlotFile);
+  }
   out.ttlMinutes = Math.max(1, Math.floor(out.ttlMinutes));
   out.dailyCap = Math.max(0, Math.floor(out.dailyCap));
   if (out.forceRoll !== null) {
@@ -175,6 +183,7 @@ function shelfForRoll(roll) {
   if (roll === 4) return 'unresolved';
   if (roll === 5) return 'durable';
   if (roll === 6) return 'dream';
+  if (roll === 7) return 'interest';
   return null;
 }
 
@@ -423,11 +432,28 @@ async function readDurable(args) {
   return result;
 }
 
+function readInterest(args) {
+  if (!args.interestSlotFile || !fs.existsSync(args.interestSlotFile)) return null;
+  const slot = normalizeInterestSlot(readJsonFile(args.interestSlotFile));
+  const fullRecords = slot.records.filter(r => !r.detail);
+  const pool = fullRecords.length ? fullRecords : slot.records;
+  if (!pool.length) return null;
+  const picked = pool[crypto.randomInt(0, pool.length)];
+  const textParts = [picked.why_me, picked.finding, picked.question, picked.feedback].filter(Boolean).join(' ');
+  return candidate(picked.title || picked.id, textParts || picked.detail || picked.id, {
+    type: 'interest_slot',
+    id: picked.id,
+    path: relativePath(args.workspace, args.interestSlotFile),
+    source_ref: picked.source || null,
+  });
+}
+
 async function readShelf(shelf, args) {
   if (shelf === 'recent') return readRecent(args);
   if (shelf === 'unresolved') return readUnresolved(args.workspace);
   if (shelf === 'durable') return await readDurable(args);
   if (shelf === 'dream') return readDream(args.workspace);
+  if (shelf === 'interest') return readInterest(args);
   return null;
 }
 

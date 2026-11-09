@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { normalizeInterestSlot, buildContextualInterestRecall } from './memory_policy.js';
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sis-boundary-'));
 const mock = path.join(root, 'notionctl.mjs');
@@ -147,4 +148,51 @@ test('state/emotion relations and subjective journal survive an invalid ambient 
   const failedJournal = run('journal_write',['--journal-dbid','journal'],'{"body":"subjective fixture"}',{...env,SIS_TEST_FAIL:'1'});
   assert.notEqual(failedJournal.status,0);
   assert.doesNotMatch(failedJournal.stdout,/"ok":\s*true/);
+});
+test('portable soul_interest_slot supports contextual formatting and ambient roll 7 without private paths', () => {
+  const slotPayload = {
+    kind: 'soul_interest_slot',
+    version: 1,
+    status: 'available',
+    items: [{
+      id: 'unfinished-web-presence',
+      status: 'ready',
+      title: '帰り道で一音だけ残さない連れ',
+      why: '途中まで道を共有した痕跡を作品に残したい。',
+      question: '最後に隣を休符にする三行詩は、別れと帰宅のどちらを呼ぶか。',
+      finding: '七音版を独立HTMLに制作し読戻し。',
+      feedback: '10/28本人: なかなか面白い表現だな',
+      updated_at: '2026-11-03T08:07:17.341Z',
+      sources: ['memory/initiative/doorstep-rest-20261103.md'],
+      deliveries: [{ at: '2026-11-03T08:07:17.341Z', status: 'submitted' }],
+      source_ref: 'external:interest[id=unfinished-web-presence]',
+    }],
+  };
+  const normalized = normalizeInterestSlot(slotPayload);
+  assert.equal(normalized.status, 'available');
+  assert.equal(normalized.records.length, 1);
+  assert.equal(normalized.records[0].why_me, '途中まで道を共有した痕跡を作品に残したい。');
+  const block = buildContextualInterestRecall(normalized);
+  assert.match(block, /Conversation support v1:/);
+  assert.match(block, /Interest context: available; records=1\./);
+  assert.match(block, /unfinished-web-presence/);
+
+  const oversized = normalizeInterestSlot({
+    ...slotPayload,
+    items: [{ ...slotPayload.items[0], finding: '<'.repeat(500) }],
+  });
+  assert.match(oversized.records[0].detail, /Whole record exceeds/);
+  assert.throws(() => normalizeInterestSlot({ kind: 'wrong', version: 1, status: 'available', items: [] }));
+
+  const workspace = path.join(root, 'interest-ambient');
+  fs.mkdirSync(workspace, { recursive: true });
+  const slotFile = path.join(workspace, 'slot.json');
+  fs.writeFileSync(slotFile, JSON.stringify(slotPayload));
+  const noFile = parse(run('stage_ambient_recall', ['--workspace', workspace, '--force-roll', '7'], '', {}));
+  assert.equal(noFile.status, 'no_candidate');
+  const staged = parse(run('stage_ambient_recall', ['--workspace', workspace, '--force-roll', '7', '--interest-slot-file', slotFile], '', {}));
+  assert.equal(staged.status, 'staged');
+  assert.equal(staged.shelf, 'interest');
+  assert.equal(staged.recall.source.type, 'interest_slot');
+  assert.equal(staged.recall.source.id, 'unfinished-web-presence');
 });

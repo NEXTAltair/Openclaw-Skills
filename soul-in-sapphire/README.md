@@ -48,7 +48,7 @@ OpenClaw向けの Emotion/State + Subjective Journal + Identity continuity 運�
 
 OpenClaw は一般的な作業・会話記憶を扱います。Soul の Notion は感情と結びついた経験記憶を保存・想起する中核であり、廃止候補や単なるarchiveではありません。同じ出来事でも保存する意味は異なります。主観日記も Dreaming の consolidation report とは別物です。
 
-記憶の責務・保存経路の監査・消費記録は [memory-transition.md](references/memory-transition.md) を参照してください。ソース更新だけでは既存の runtime snapshot や cron は変わりません。
+記憶の責務・OpenClaw標準記憶との3レーン連携・外部関心スロット(`soul_interest_slot` v1)・消費記録は [memory-transition.md](references/memory-transition.md) を参照してください。ソース更新だけでは既存の runtime snapshot や cron は変わりません。
 
 - Notion API **2025-09-03**(data_sources世代) 前提
 - 個人のNotion token/IDはリポジトリに含めない
