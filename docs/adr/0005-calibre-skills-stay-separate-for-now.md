@@ -3,7 +3,7 @@
 - **日付**: 2026-11-09
 - **ステータス**: Accepted (暫定。プラグイン一本化を将来再検討する)
 - **対象**: calibre-catalog-read、calibre-metadata-apply、calibre-reference-ingest、ClawHub publish/install、[ADR 0002](0002-separate-skill-source-from-runtime-installation.md)
-- **関連 Issue / PR**: なし
+- **関連 Issue / PR**: [#24](https://github.com/NEXTAltair/Openclaw-Skills/issues/24) (プラグイン一本化の再検討。見直し条件はこの issue で管理する)
 
 ## 背景
 
