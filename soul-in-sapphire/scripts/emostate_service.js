@@ -23,6 +23,16 @@ export async function writeTick(payload,ids,{request,receiptFile,mirrorFile}={})
   if(n!==null&&(n<-5||n>5))throw Error('Emotion level must be -5..5');
  }
  for(const item of [...emotions,st])for(const field of ['body_signal','avoid'])if(field in item&&(!Array.isArray(item[field])||item[field].some(x=>typeof x!=='string')))throw Error(field+' must be an array of strings');
+ // Validate every select option before any API or receipt mutation. Do not rewrite text:
+ // a replacement character can silently change meaning or collide with another option.
+ for(const [item,fields] of [[event,['importance','trigger','source']],[st,['source','mood_label','intent','need_stack']],...emotions.map(e=>[e,['axis','need','coping']])]){
+  for(const field of fields){const value=item[field];if(value===undefined||value===null||value==='')continue;
+   if((typeof value!=='string'&&typeof value!=='number')||String(value).includes(',')||!String(value).trim()||String(value).length>100)throw Error('Invalid Notion select '+field+': use a nonempty option without ASCII commas (max 100 characters); keep full wording in context, comment, or reason');
+  }
+ }
+ for(const [item,field] of [[st,'avoid'],...emotions.map(e=>[e,'body_signal'])])for(const value of item[field]||[]){
+  if(!value.trim()||value.includes(',')||value.length>100)throw Error('Invalid Notion multi_select '+field+': each option must be nonempty, without ASCII commas (max 100 characters); keep full wording in context, comment, or reason');
+ }
  for(const [item,fields] of [[event,['control','uncertainty']],[st,['need_level']],...emotions.map(e=>[e,['weight']])]){
   for(const field of fields)if(item[field]!==undefined&&item[field]!==null&&finiteNumber(item[field])===null)throw Error('Invalid numeric field: '+field);
  }

@@ -73,3 +73,5 @@ Historical missing-write repair is separate from coordinate migration. Preserve
 the real experience/emotion and compute only the missing mechanical state and
 affected successors, with exact before/after backups. Never invent a feeling to
 fill a historical hole.
+
+Select and multi-select option names must be nonempty, at most 100 characters, and contain no ASCII comma. Preflight rejects invalid options before any API request or receipt write; put detailed wording unchanged in context, comment, or reason and choose concise valid option names. For an older partial receipt with an invalid payload, do not change its hash or start a new receipt: inspect and reconcile the existing Notion pages and receipt manually before continuing.

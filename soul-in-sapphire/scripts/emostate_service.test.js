@@ -63,3 +63,15 @@ test('automatic timestamps identify the same instant in UTC and JST',()=>{
  }
  assert.ok(nowIso().endsWith('Z'));
 });
+
+test('all select lanes reject commas before writes without changing semantic text or creating a receipt',async()=>{
+ for(const [lane,field] of [['event','trigger'],['event','source'],['state','mood_label'],['state','intent'],['state','need_stack'],['state','source'],['emotion','need'],['emotion','coping'],['emotion','body_signal'],['state','avoid']]){
+  const s=scene(),p=structuredClone(payload),target=lane==='emotion'?p.emotions[0]:p[lane];
+  target[field]=['body_signal','avoid'].includes(field)?['one,two']:'one,two';
+  await assert.rejects(writeTick(p,ids,s),/Invalid Notion/);assert.equal(s.calls.length,0);assert.equal(fs.existsSync(s.receiptFile),false);assert.deepEqual(target[field],['body_signal','avoid'].includes(field)?['one,two']:'one,two');
+ }
+});
+test('legacy partial receipt cannot be reused with a corrected payload',async()=>{
+ const s=scene(),p=structuredClone(payload);s.setFail('state-db');await assert.rejects(writeTick(p,ids,s));
+ p.state.intent='changed';const n=s.calls.length;await assert.rejects(writeTick(p,ids,s),/different payload/);assert.equal(s.calls.length,n);
+});
