@@ -24,14 +24,14 @@ if (apiPath.includes('/databases/')) result = {id:'fixture-db',data_sources:[{id
 if (apiPath.includes('/data_sources/') && !apiPath.endsWith('/query')) result = {properties:Object.fromEntries(Object.entries({Name:'title',when:'date',context:'rich_text',axis:'select',level:'number',scale_version:'number',event:'relation',state_json:'rich_text',body:'rich_text',worklog:'rich_text',session_summary:'rich_text'}).map(([name,type])=>[name,{type,...(type==='relation'?{relation:{data_source_id:'fixture-ds'}}:{})}]))};
 console.log(JSON.stringify({ok:true,result}));
 `);
-function run(name, args = [], input = '', env = {}) {
+function run(name, args = [], input = '', overrides = {}) {
   const childEnv = { ...process.env };
   for (const key of Object.keys(childEnv)) {
     if (key.startsWith('NOTION_') || key.startsWith('SIS_')) delete childEnv[key];
   }
   return spawnSync(process.execPath, [path.join(scripts, name + '.js'), ...args], {
     encoding: 'utf8', input, timeout: 10000,
-    env: { ...childEnv, NOTIONCTL_PATH: mock, ...env },
+    env: { ...childEnv, NOTIONCTL_PATH: mock, ...overrides },
   });
 }
 const parse = result => JSON.parse(result.stdout);

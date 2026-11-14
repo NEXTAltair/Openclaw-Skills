@@ -163,8 +163,7 @@ function loadState(file, dailyCap, timeZone) {
       lastError: null,
     };
   }
-  state._loadError = loadError;
-  return state;
+  return { state, loadError };
 }
 
 function atomicWriteJson(file, value) {
@@ -504,9 +503,9 @@ async function main() {
   const stateFile = path.join(args.stateDir, 'ambient-recall-state.json');
   const stagedFile = path.join(args.stateDir, 'ambient-recall.json');
   const at = nowIso();
-  let state = loadState(stateFile, args.dailyCap, args.timezone);
-  const loadError = state._loadError;
-  delete state._loadError;
+  const loaded = loadState(stateFile, args.dailyCap, args.timezone);
+  let state = loaded.state;
+  const loadError = loaded.loadError;
   const roll = args.forceRoll ?? randomRoll();
   const shelf = shelfForRoll(roll);
   let staged = null;

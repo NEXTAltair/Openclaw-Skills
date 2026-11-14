@@ -1,8 +1,9 @@
 # Fresh sensing on periodic checks
 
 This is a model interpretation workflow, not a task-to-emotion scoring rule.
-Keep the procedure in a persistent instruction file referenced by the configured
-heartbeat prompt. Monitor scratch is previous-run context, not the procedure.
+Keep the procedure in the workspace file that the configured heartbeat prompt
+reads (for example `HEARTBEAT.md`). Monitor scratch is previous-run context, not
+the procedure.
 Resolve the installed skill directory and agent workspace explicitly; do not
 copy another installation's paths, database IDs, credentials or schedule.
 

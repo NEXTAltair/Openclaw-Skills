@@ -43,7 +43,7 @@ function parseNotionctlJson(raw) {
 function apiCompatibilityHint(rawText) {
   const text = String(rawText || '');
   if (!text.includes('Unknown command: api')) return null;
-  return 'Installed notionctl does not support "api". Update skills/notion-api-automation/scripts/notionctl.mjs or set NOTIONCTL_PATH to a compatible notionctl.';
+  return 'The resolved notionctl has no "api" subcommand. Point NOTIONCTL_PATH at a notionctl whose --help lists "api".';
 }
 
 function authSetupHint() {
@@ -85,7 +85,39 @@ function normalizeApiPath(apiPath) {
   return `/v1/${p}`;
 }
 
+// The only Notion endpoints this skill's memory, state, journal and setup
+// scripts use. Anything else is refused before notionctl is started, so the
+// bridge cannot be driven as a general Notion client.
+const ID = '[^/?#]+';
+const ALLOWED_API_CALLS = [
+  ['GET', new RegExp('^/v1/users/me$')],
+  ['GET', new RegExp(`^/v1/blocks/${ID}/children(\\?[^#]*)?$`)],
+  ['POST', new RegExp('^/v1/databases$')],
+  ['GET', new RegExp(`^/v1/databases/${ID}$`)],
+  ['GET', new RegExp(`^/v1/data_sources/${ID}$`)],
+  ['PATCH', new RegExp(`^/v1/data_sources/${ID}$`)],
+  ['POST', new RegExp(`^/v1/data_sources/${ID}/query$`)],
+  ['POST', new RegExp('^/v1/pages$')],
+  ['GET', new RegExp(`^/v1/pages/${ID}$`)],
+  ['PATCH', new RegExp(`^/v1/pages/${ID}$`)],
+];
+const PAGE_UPDATE = new RegExp(`^/v1/pages/${ID}$`);
+
+function assertAllowedApiCall(method, apiPath, body) {
+  const verb = String(method).toUpperCase();
+  const target = String(apiPath);
+  if (!ALLOWED_API_CALLS.some(([allowedVerb, shape]) => allowedVerb === verb && shape.test(target))) {
+    throw new Error(`Notion call outside this skill's scope: ${verb} ${target.split('?')[0]}`);
+  }
+  // Page updates change properties only; archiving, trashing and moving pages stay out of reach.
+  if (verb === 'PATCH' && PAGE_UPDATE.test(target)) {
+    const extra = Object.keys(body || {}).filter((key) => key !== 'properties');
+    if (extra.length) throw new Error(`Notion page update outside this skill's scope: ${extra.join(', ')}`);
+  }
+}
+
 function runApi(method, apiPath, body = null) {
+  assertAllowedApiCall(method, apiPath, body);
   const args = [notionctlPath(), 'api', '--compact', '--method', String(method).toUpperCase(), '--path', String(apiPath)];
   if (body != null) args.push('--body-json', JSON.stringify(body));
   let out = '';
@@ -197,13 +229,6 @@ function queryRecent(dsId, pageSize = 10) {
   return res?.results || [];
 }
 
-function patchPage(pageId, properties = undefined, archived = undefined) {
-  const b = {};
-  if (properties !== undefined) b.properties = properties;
-  if (archived !== undefined) b.archived = !!archived;
-  return runApi('PATCH', `/v1/pages/${pageId}`, b);
-}
-
 export {
   extractPageId,
   listChildDatabases,
@@ -217,5 +242,4 @@ export {
   requireIds,
   textOf,
   queryRecent,
-  patchPage,
 };

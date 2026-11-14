@@ -70,16 +70,38 @@ OpenClaw は一般的な作業・会話記憶を扱います。Soul の Notion �
 
 - OpenClaw Gateway
 - Notion Integration + token
-- Notion操作用スキル(ClawHub): `notion-api-automation`
+- `api` サブコマンドを持つ `notionctl` (Notion APIを呼ぶCLI。`notion-api-automation` スキルの `scripts/notionctl.mjs` と同じ呼び出し形式)
 
-インストール例:
+このスキルのスクリプトはNotionへ直接通信しません。Notionの読み書きはすべて
+`node <notionctl> api --compact --method <METHOD> --path <PATH>` を子プロセスとして呼んで行います。
 
-```bash
-# notion-api-automation
-npx clawhub@latest install notion-api-automation
-pnpm dlx clawhub@latest install notion-api-automation
+`notionctl` の探索順:
 
-```
+1. 環境変数 `NOTIONCTL_PATH`
+2. このスキルと同じ `skills/` 配下にある `notion-api-automation/scripts/notionctl.mjs`
+
+公開版 `@tristanmanchester/notion-api-automation` 1.0.0 の `notionctl` には `api` サブコマンドがありません (2026-11-14 確認)。
+`node <notionctl> --help` に `api` が出る互換版を用意し、`NOTIONCTL_PATH` で指定してください。
+
+## Notionで行う操作の範囲
+
+`scripts/notionctl_bridge.js` は、次のエンドポイント以外への要求を `notionctl` を起動する前に拒否します。
+
+| 操作 | エンドポイント | 使う場面 |
+| --- | --- | --- |
+| 認証の確認 | `GET /v1/users/me` | 疎通確認 |
+| 既存DBの探索 | `GET /v1/blocks/{親ページ}/children` | 初回セットアップ |
+| DBの作成 | `POST /v1/databases` | 初回セットアップ (5つのDB) |
+| DB・スキーマの読取 | `GET /v1/databases/{id}`、`GET /v1/data_sources/{id}` | 書き込み先の検証 |
+| スキーマの追加・変更 | `PATCH /v1/data_sources/{id}` | セットアップ、journalスキーマ更新 |
+| レコードの検索 | `POST /v1/data_sources/{id}/query` | 記憶・状態・日記の想起 |
+| レコードの作成 | `POST /v1/pages` | 記憶・出来事・感情・状態・日記の保存 |
+| レコードの読取 | `GET /v1/pages/{id}` | 保存後の読み戻し、関連の解決 |
+| プロパティの更新 | `PATCH /v1/pages/{id}` (`properties` のみ) | 感情尺度の移行 |
+
+ページのアーカイブ・削除、ワークスペース全体の検索、コメント、ユーザー一覧、ブロック本文の編集は行いません。
+対象は親ページの下に作る `<base>-mem` / `-events` / `-emotions` / `-state` / `-journal` の5つのDBです。
+Notion側の到達範囲そのものは、Integrationに共有したページで決まります。
 
 ## セットアップ
 
@@ -170,14 +192,12 @@ pnpm dlx clawhub@latest install notion-api-automation
   - `tags` (multi-select)
   - `source` (select): `cron|manual`
 
-### 0) Notion操作スキルをインストール
+### 0) notionctl を用意
+
+「依存」の節にある探索順のどちらかで `notionctl` を解決できるようにし、`api` サブコマンドがあることを確かめます。
 
 ```bash
-npx clawhub@latest install notion-api-automation
-```
-
-``bash
-pnpm dlx clawhub@latest install notion-api-automation
+node "$NOTIONCTL_PATH" --help
 ```
 
 ### 1) Notion Integration

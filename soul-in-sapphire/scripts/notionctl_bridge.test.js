@@ -43,3 +43,42 @@ test('dependency discovery works for unscoped and owner-qualified installed snap
     assert.deepEqual(JSON.parse(result.stdout), {fixture:true});
   }
 });
+
+test('calls outside the documented Notion scope are refused before notionctl starts', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sis-api-scope-'));
+  const mock = path.join(root, 'notionctl.mjs');
+  const probe = path.join(root, 'probe.mjs');
+  const calls = path.join(root, 'calls.log');
+  const bridge = new URL('./notionctl_bridge.js', import.meta.url).href;
+  fs.writeFileSync(mock, `import fs from 'node:fs';
+const arg = name => process.argv[process.argv.indexOf(name) + 1];
+fs.appendFileSync(${JSON.stringify(calls)}, arg('--method') + ' ' + arg('--path') + '\\n');
+console.log(JSON.stringify({ok:true,result:{}}));`);
+  fs.writeFileSync(probe, `import {httpJson} from ${JSON.stringify(bridge)};
+const attempts = JSON.parse(process.argv[2]);
+console.log(JSON.stringify(attempts.map(([method, apiPath, body]) => {
+  try { httpJson(method, apiPath, body); return 'ok'; } catch (error) { return error.message; }
+})));`);
+  const id = '0123456789abcdef0123456789abcdef';
+  const allowed = [
+    ['GET', '/users/me'], ['GET', `/blocks/${id}/children?page_size=100`], ['POST', '/databases', {}],
+    ['GET', `/databases/${id}`], ['GET', `/data_sources/${id}`], ['PATCH', `/data_sources/${id}`, {properties:{}}],
+    ['POST', `/data_sources/${id}/query`, {}], ['POST', '/pages', {}], ['GET', `/pages/${id}`],
+    ['PATCH', `/pages/${id}`, {properties:{}}],
+  ];
+  const refused = [
+    ['DELETE', `/blocks/${id}`], ['POST', '/search', {}], ['GET', '/users'], ['POST', '/comments', {}],
+    ['PATCH', `/blocks/${id}`, {}], ['PATCH', `/blocks/${id}/children`, {}], ['GET', `/pages/${id}/properties/title`],
+    ['PATCH', `/pages/${id}`, {archived:true}], ['PATCH', `/pages/${id}`, {properties:{}, in_trash:true}],
+    ['PATCH', `/databases/${id}`, {}],
+  ];
+  const env = { ...process.env, NOTIONCTL_PATH: mock };
+  const result = spawnSync(process.execPath, [probe, JSON.stringify([...allowed, ...refused])], { env, encoding:'utf8', timeout:20000 });
+  assert.equal(result.status, 0, result.stderr);
+  const outcomes = JSON.parse(result.stdout);
+  assert.deepEqual(outcomes.slice(0, allowed.length), allowed.map(() => 'ok'));
+  for (const message of outcomes.slice(allowed.length)) assert.match(message, /outside this skill's scope/);
+  const started = fs.readFileSync(calls, 'utf8').trim().split('\n');
+  assert.equal(started.length, allowed.length);
+  assert.ok(started.every(line => line.startsWith('GET /v1/') || line.startsWith('POST /v1/') || line.startsWith('PATCH /v1/')));
+});
